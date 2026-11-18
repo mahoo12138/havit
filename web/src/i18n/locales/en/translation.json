@@ -1258,6 +1258,8 @@
     "locationPickerPath": "View full location path",
     "locationPickerNoSelection": "No location selected",
     "locationPickerNoPhysicalLocations": "No physical locations available",
+    "locationPickerClearSearch": "Clear search",
+    "locationPickerNoMatch": "No matching locations",
     "status": "Status",
     "warranty": "Warranty",
     "serialNumber": "Serial No.",

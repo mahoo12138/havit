@@ -75,55 +75,93 @@ export const pathTooltip = style({
   lineHeight: themeVars.leadingSnug,
 });
 
+// The trigger renders as a plain span wrapping the typeable search input —
+// pointer events on the input are stopped in the component so Base UI's
+// click-toggle never closes the panel while typing.
 export const trigger = style({
   minWidth: 0,
   height: '100%',
   width: '100%',
   flex: '1 1 auto',
-  display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) auto',
+  display: 'flex',
   alignItems: 'center',
-  gap: themeVars.space2,
+  gap: themeVars.space1,
+  background: 'transparent',
+  color: 'inherit',
+  outline: 'none',
+});
+
+export const triggerInput = style({
+  flex: '1 1 auto',
+  minWidth: 0,
+  height: '100%',
   border: 0,
   background: 'transparent',
   color: 'inherit',
-  padding: `0 ${themeVars.space3} 0 2.25rem`,
   font: 'inherit',
   fontSize: themeVars.textSizeBase,
-  textAlign: 'left',
+  padding: `0 ${themeVars.space2} 0 2.25rem`,
   outline: 'none',
-  cursor: 'pointer',
   selectors: {
+    '&::placeholder': {
+      color: themeVars.muted,
+    },
     '&:disabled': {
       cursor: 'not-allowed',
     },
   },
 });
 
-export const value = style({
-  minWidth: 0,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  lineHeight: themeVars.leadingTight,
+export const triggerIcon = style({
+  flex: '0 0 auto',
+  display: 'inline-grid',
+  placeItems: 'center',
+  width: '1.5rem',
+  height: '1.5rem',
+  marginInlineEnd: themeVars.space1,
+  color: themeVars.muted,
+  cursor: 'text',
 });
 
-export const placeholder = style([
-  value,
-  {
-    color: themeVars.muted,
-  },
-]);
-
-export const chevron = style({
+export const triggerClear = style({
+  flex: '0 0 auto',
+  display: 'inline-grid',
+  placeItems: 'center',
+  width: '1.25rem',
+  height: '1.25rem',
+  marginInlineEnd: themeVars.space2,
+  border: 0,
+  borderRadius: themeVars.radius1,
+  background: 'transparent',
   color: themeVars.muted,
-  transition: 'transform 160ms ease, color 140ms ease',
+  padding: 0,
+  cursor: 'pointer',
+  transition: 'background-color 140ms ease, color 140ms ease',
   selectors: {
-    [`${control}[data-open="true"] &`]: {
-      transform: 'rotate(180deg)',
+    '&:hover': {
+      background: themeVars.lineSoft,
       color: themeVars.text,
     },
+    '&:focus-visible': {
+      boxShadow: `0 0 0 3px ${themeVars.focusRing}`,
+      outline: 'none',
+    },
   },
+});
+
+export const matchMark = style({
+  margin: 0,
+  padding: 0,
+  borderRadius: '2px',
+  background: themeVars.accentSoft,
+  color: themeVars.accentInk,
+});
+
+export const noResults = style({
+  padding: `${themeVars.space3} ${themeVars.space3} ${themeVars.space4}`,
+  color: themeVars.muted,
+  fontSize: themeVars.textSizeBase,
+  textAlign: 'center',
 });
 
 export const panel = style({
@@ -133,31 +171,6 @@ export const panel = style({
   gap: 0,
   overflow: 'hidden',
   padding: 0,
-});
-
-export const panelHeader = style({
-  gap: '0.1rem',
-  padding: `${themeVars.space2} ${themeVars.space3}`,
-  borderBottom: `1px solid ${themeVars.lineSoft}`,
-});
-
-globalStyle(`${panelHeader} [data-slot="popover-title"]`, {
-  margin: 0,
-  fontSize: themeVars.textSizeMd,
-  lineHeight: themeVars.leadingSnug,
-});
-
-globalStyle(`${panelHeader} [data-slot="popover-description"]`, {
-  margin: 0,
-});
-
-export const panelPath = style({
-  minWidth: 0,
-  fontSize: themeVars.textSizeXs,
-  lineHeight: themeVars.leadingTight,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
 });
 
 export const treeBody = style({
@@ -171,7 +184,7 @@ export const treeInner = style({
   display: 'inline-flex',
   minWidth: '100%',
   flexDirection: 'column',
-  padding: `${themeVars.space1} ${themeVars.space2} ${themeVars.space2}`,
+  padding: '2px 4px 4px',
 });
 
 globalStyle(`${treeInner} [data-slot="tree"]`, {
@@ -182,6 +195,17 @@ globalStyle(`${treeInner} [data-slot="tree"]`, {
 globalStyle(`${treeInner} [data-slot="tree-group"]`, {
   width: 'max-content',
   minWidth: '100%',
+  paddingBlock: '2px',
+});
+
+globalStyle(`${treeInner} [data-slot="tree-group-label"]`, {
+  padding: '0.375rem 0.375rem 0.25rem',
+});
+
+globalStyle(`${treeInner} [data-slot="tree-item"]`, {
+  width: 'max-content',
+  minWidth: '100%',
+  paddingBlock: '5px',
 });
 
 globalStyle(`${treeInner} [data-slot="tree-item"]`, {

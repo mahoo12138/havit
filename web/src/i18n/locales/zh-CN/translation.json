@@ -1254,6 +1254,8 @@
     "locationPickerPath": "查看完整位置",
     "locationPickerNoSelection": "尚未选择位置",
     "locationPickerNoPhysicalLocations": "暂无可选物理位置",
+    "locationPickerClearSearch": "清除搜索",
+    "locationPickerNoMatch": "没有匹配的位置",
     "status": "状态",
     "warranty": "保修",
     "serialNumber": "序列号",
