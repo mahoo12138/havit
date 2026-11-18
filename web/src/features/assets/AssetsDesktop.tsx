@@ -52,6 +52,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table';
+import { NumberFieldField } from '../../components/ui/number-field-field';
 import { TextareaField } from '../../components/ui/textarea-field';
 import { TextField } from '../../components/ui/text-field';
 import { CategoryTabs } from '../../features/categories/CategoryTabs';
@@ -269,8 +270,10 @@ export function AssetsDesktop() {
       <Dialog open={opened} onClose={() => setOpened(false)} title={t('assets.create')}>
         <div className={s.formGrid}>
           <TextField label={t('items.name')} required value={form.name} onChange={(event) => setForm({ ...form, name: event.currentTarget.value })} />
-          <LocationPickerField label={t('assets.location')} tree={locData?.tree} placeholder={t('items.selectLocation')} required value={form.location_id} onChange={(value) => setForm({ ...form, location_id: value })} includeVirtualLocations={false} />
           <SelectField label={t('items.category')} placeholder={t('assets.selectCategory')} options={categoryOptions} value={form.category} onChange={(event) => setForm({ ...form, category: event.currentTarget.value })} />
+          <div className={s.formWide}>
+            <LocationPickerField label={t('assets.location')} tree={locData?.tree} placeholder={t('items.selectLocation')} required value={form.location_id} onChange={(value) => setForm({ ...form, location_id: value })} includeVirtualLocations={false} />
+          </div>
           <SelectField
             label={t('items.status')}
             options={[
@@ -284,7 +287,9 @@ export function AssetsDesktop() {
           <TextField label={t('assets.serialNumberLabel')} value={form.serial_number} onChange={(event) => setForm({ ...form, serial_number: event.currentTarget.value })} />
           <DatePickerField label={t('itemDetail.purchasedAt')} value={form.purchase_date} onChange={(value) => setForm({ ...form, purchase_date: value })} />
           <DatePickerField label={t('assets.warrantyExpiry')} value={form.warranty_expires_at} onChange={(value) => setForm({ ...form, warranty_expires_at: value })} />
-          <TextField label={t('assets.purchasePriceWithCurrency', { currency: defaultCurrency })} type="number" value={form.purchase_price} onChange={(event) => setForm({ ...form, purchase_price: event.currentTarget.value })} />
+          <div className={s.formWide}>
+            <NumberFieldField label={t('assets.purchasePriceWithCurrency', { currency: defaultCurrency })} value={form.purchase_price} onChange={(value) => setForm({ ...form, purchase_price: value })} />
+          </div>
           <div className={s.formWide}>
             <TextareaField label={t('assets.notes')} placeholder={t('assets.notesPlaceholder')} value={form.description} onChange={(event) => setForm({ ...form, description: event.currentTarget.value })} />
           </div>
