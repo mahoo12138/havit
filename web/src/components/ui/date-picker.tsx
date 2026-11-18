@@ -1,8 +1,10 @@
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 import { CalendarIcon, XIcon } from 'lucide-react';
+import { enUS, zhCN } from 'react-day-picker/locale';
+import type { Locale } from 'react-day-picker';
 
 import { Calendar } from './calendar';
-import { buttonVariants } from './button';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import * as s from './date-picker.css';
 
@@ -25,13 +27,27 @@ function formatDateValue(date?: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function formatDisplayDate(date?: Date): string {
+function getLocaleConfig(language?: string): { code: string; calendarLocale: Locale } {
+  const isZh = language?.toLowerCase().startsWith('zh');
+  return {
+    code: isZh ? 'zh-CN' : 'en-US',
+    calendarLocale: isZh ? zhCN : enUS,
+  };
+}
+
+// Compact, locale-aware display: en-US reads like "Apr 10, 2024"; the numeric
+// form keeps narrow two-column form fields from truncating CJK date glyphs.
+function formatDisplayDate(date: Date | undefined, code: string): string {
   if (!date) return '';
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
+  try {
+    return new Intl.DateTimeFormat(code, {
+      year: 'numeric',
+      month: code === 'zh-CN' ? 'numeric' : 'short',
+      day: 'numeric',
+    }).format(date);
+  } catch {
+    return formatDateValue(date);
+  }
 }
 
 type DatePickerProps = Omit<
@@ -41,6 +57,8 @@ type DatePickerProps = Omit<
   value?: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  minDate?: Date;
+  maxDate?: Date;
 };
 
 function DatePicker({
@@ -49,54 +67,53 @@ function DatePicker({
   onChange,
   placeholder,
   disabled,
+  minDate,
+  maxDate,
   ...props
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
+  const { i18n } = useTranslation();
+  const localeConfig = getLocaleConfig(i18n.language);
   const selected = React.useMemo(() => parseDate(value), [value]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        className={buttonVariants({
-          variant: 'outline',
-          className: cx(s.trigger, className),
-        })}
-        disabled={disabled}
-        data-empty={!selected || undefined}
-        aria-expanded={open}
-        {...props}
-      >
-        <CalendarIcon data-icon="inline-start" />
-        <span className={s.value}>
-          {selected ? formatDisplayDate(selected) : placeholder}
-        </span>
-        {selected && !disabled ? (
-          <span
-            role="button"
-            tabIndex={-1}
-            className={s.clear}
-            aria-label="Clear date"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onChange('');
-            }}
-          >
-            <XIcon />
+    <span className={s.control}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          className={cx(s.trigger, className)}
+          disabled={disabled}
+          data-empty={!selected || undefined}
+          {...props}
+        >
+          <CalendarIcon className={s.triggerIcon} aria-hidden="true" />
+          <span className={s.value}>
+            {selected ? formatDisplayDate(selected, localeConfig.code) : placeholder}
           </span>
-        ) : null}
-      </PopoverTrigger>
-      <PopoverContent className={s.content} align="start">
-        <Calendar
-          mode="single"
-          selected={selected}
-          onSelect={(date) => {
-            onChange(formatDateValue(date));
-            setOpen(false);
-          }}
-        />
-      </PopoverContent>
-    </Popover>
+        </PopoverTrigger>
+        <PopoverContent className={s.content} align="start" sideOffset={8}>
+          <Calendar
+            locale={localeConfig.calendarLocale}
+            selected={selected}
+            minDate={minDate}
+            maxDate={maxDate}
+            onSelect={(date) => {
+              onChange(formatDateValue(date));
+              setOpen(false);
+            }}
+          />
+        </PopoverContent>
+      </Popover>
+      {selected && !disabled ? (
+        <button
+          type="button"
+          className={s.clear}
+          aria-label="Clear date"
+          onClick={() => onChange('')}
+        >
+          <XIcon aria-hidden="true" />
+        </button>
+      ) : null}
+    </span>
   );
 }
 
