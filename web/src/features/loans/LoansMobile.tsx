@@ -30,6 +30,7 @@ import {
 import { SelectField } from '../../components/ui/select-field';
 import { Spinner } from '../../components/ui/spinner';
 import { TabsNav } from '../../components/ui/tabs-nav';
+import { NumberFieldField } from '../../components/ui/number-field-field';
 import { TextField } from '../../components/ui/text-field';
 import { useToast } from '../../components/ui/use-toast';
 import { useNetworkStatus } from '../../utils/useNetworkStatus';
@@ -642,11 +643,10 @@ export function LoansMobile() {
         <div className={s.sheetBody}>
           {targetLoan && <SheetTarget loan={targetLoan} />}
           <p className={s.sheetHint}>{t('loans.unreturnedHint')}</p>
-          <TextField
+          <NumberFieldField
             label={t('loans.compensation')}
-            type="number"
             value={compensation}
-            onChange={(event) => setCompensation(event.currentTarget.value)}
+            onChange={setCompensation}
           />
           <TextField
             label={t('loans.compensationCurrency')}

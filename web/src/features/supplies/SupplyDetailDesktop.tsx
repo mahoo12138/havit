@@ -39,8 +39,8 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table';
+import { NumberFieldField } from '../../components/ui/number-field-field';
 import { TextareaField } from '../../components/ui/textarea-field';
-import { TextField } from '../../components/ui/text-field';
 import { useToast } from '../../components/ui/use-toast';
 import {
   itemsApi,
@@ -957,20 +957,18 @@ function RecordPurchaseDialog({
       onClose={onClose}
     >
       <Stack>
-        <TextField
+        <NumberFieldField
           label={t('supplies.purchaseQuantity')}
-          type="number"
           min={1}
           value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
+          onChange={setQuantity}
         />
-        <TextField
+        <NumberFieldField
           label={t('supplies.purchasePrice')}
-          type="number"
           min={0}
-          step="0.01"
+          step={0.01}
           value={price}
-          onChange={(e) => setPrice(e.target.value)}
+          onChange={setPrice}
         />
         <SelectField
           label={t('supplies.purchaseCurrency')}
@@ -1036,12 +1034,11 @@ function AdjustStockDialog({
       onClose={onClose}
     >
       <Stack>
-        <TextField
+        <NumberFieldField
           label={t('supplies.newStock')}
-          type="number"
           min={0}
           value={value}
-          onChange={(e) => setStock(e.target.value)}
+          onChange={setStock}
           autoFocus
         />
         <div
@@ -1095,12 +1092,11 @@ function SetThresholdDialog({
       onClose={onClose}
     >
       <Stack>
-        <TextField
+        <NumberFieldField
           label={t('supplies.thresholdLabel')}
-          type="number"
           min={1}
           value={value}
-          onChange={(e) => setThreshold(e.target.value)}
+          onChange={setThreshold}
           autoFocus
         />
         <div

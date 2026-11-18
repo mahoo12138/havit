@@ -38,6 +38,7 @@ import {
 } from '../../components/ui/table';
 import { TableCard } from '../../components/ui/table-card';
 import { TabsNav } from '../../components/ui/tabs-nav';
+import { NumberFieldField } from '../../components/ui/number-field-field';
 import { TextareaField } from '../../components/ui/textarea-field';
 import { TextField } from '../../components/ui/text-field';
 import { TreeSelectField } from '../../components/ui/tree-select-field';
@@ -1155,27 +1156,24 @@ function AddSupplyDialog({
 
         {kind === 'tracked_spares' && (
           <>
-            <TextField
+            <NumberFieldField
               label={t('supplies.initialStock')}
-              type="number"
               min={0}
               value={stock}
-              onChange={(e) => setStock(e.target.value)}
+              onChange={setStock}
             />
-            <TextField
+            <NumberFieldField
               label={t('supplies.thresholdLabel')}
-              type="number"
               min={1}
               value={threshold}
-              onChange={(e) => setThreshold(e.target.value)}
+              onChange={setThreshold}
             />
-            <TextField
+            <NumberFieldField
               label={t('supplies.lifespanDays')}
-              type="number"
               min={1}
               placeholder={t('supplies.lifespanDaysHint')}
               value={lifespan}
-              onChange={(e) => setLifespan(e.target.value)}
+              onChange={setLifespan}
             />
           </>
         )}
@@ -1265,20 +1263,18 @@ function RecordPurchaseDialog({
       onClose={onClose}
     >
       <Stack>
-        <TextField
+        <NumberFieldField
           label={t('supplies.purchaseQuantity')}
-          type="number"
           min={1}
           value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
+          onChange={setQuantity}
         />
-        <TextField
+        <NumberFieldField
           label={t('supplies.purchasePrice')}
-          type="number"
           min={0}
-          step="0.01"
+          step={0.01}
           value={price}
-          onChange={(e) => setPrice(e.target.value)}
+          onChange={setPrice}
         />
         <SelectField
           label={t('supplies.purchaseCurrency')}
@@ -1344,12 +1340,11 @@ function AdjustStockDialog({
       onClose={onClose}
     >
       <Stack>
-        <TextField
+        <NumberFieldField
           label={t('supplies.newStock')}
-          type="number"
           min={0}
           value={initial}
-          onChange={(e) => setStock(e.target.value)}
+          onChange={setStock}
           autoFocus
         />
         <div

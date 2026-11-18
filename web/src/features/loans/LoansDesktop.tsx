@@ -28,6 +28,7 @@ import {
 } from '../../components/ui/table';
 import { TableCard } from '../../components/ui/table-card';
 import { TabsNav } from '../../components/ui/tabs-nav';
+import { NumberFieldField } from '../../components/ui/number-field-field';
 import { TextField } from '../../components/ui/text-field';
 import { itemsApi, loansApi, type LoanWithItem } from '../../api/client';
 
@@ -584,11 +585,10 @@ export function LoansDesktop() {
             <p className={uiStyles.helpParagraph}>
               {t('loans.unreturnedHint')}
             </p>
-            <TextField
+            <NumberFieldField
               label={t('loans.compensation')}
-              type="number"
               value={compensation}
-              onChange={(e) => setCompensation(e.target.value)}
+              onChange={setCompensation}
             />
             <TextField
               label={t('loans.compensationCurrency')}

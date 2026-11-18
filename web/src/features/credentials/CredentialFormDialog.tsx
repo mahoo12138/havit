@@ -5,6 +5,7 @@ import { Stack } from '../../components/ui';
 import { Button } from '../../components/ui/button';
 import { Dialog } from '../../components/ui/dialog-compat';
 import { DatePickerField } from '../../components/ui/date-picker-field';
+import { NumberFieldField } from '../../components/ui/number-field-field';
 import { SelectField } from '../../components/ui/select-field';
 import { TextField } from '../../components/ui/text-field';
 import { useToast } from '../../components/ui/use-toast';
@@ -121,7 +122,7 @@ export function CredentialFormDialog({
         />
         <DatePickerField label={t('credentials.purchasedAt')} value={purchasedAt} onChange={setPurchasedAt} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-          <TextField label={t('credentials.price')} type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+          <NumberFieldField label={t('credentials.price')} value={price} onChange={setPrice} />
           <TextField label={t('credentials.currency')} value={currency} onChange={(e) => setCurrency(e.target.value)} />
         </div>
         <Button onClick={submit} disabled={!canSubmit}>

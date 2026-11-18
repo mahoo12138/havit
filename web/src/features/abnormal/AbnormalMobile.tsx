@@ -41,8 +41,8 @@ import {
 } from '../../components/ui/select';
 import { SelectField } from '../../components/ui/select-field';
 import { Spinner } from '../../components/ui/spinner';
+import { NumberFieldField } from '../../components/ui/number-field-field';
 import { TextareaField } from '../../components/ui/textarea-field';
-import { TextField } from '../../components/ui/text-field';
 import { uiStyles } from '../../components/ui';
 import { useToast } from '../../components/ui/use-toast';
 import { themeVars } from '../../styles/theme.css';
@@ -917,11 +917,10 @@ export function AbnormalMobile() {
             value={addForm.date}
             onChange={(value) => setAddForm({ ...addForm, date: value })}
           />
-          <TextField
+          <NumberFieldField
             label={t('abnormal.addLossLabel', { currency: defaultCurrency })}
-            type="number"
             value={addForm.loss}
-            onChange={(event) => setAddForm({ ...addForm, loss: event.currentTarget.value })}
+            onChange={(value) => setAddForm({ ...addForm, loss: value })}
           />
           <TextareaField
             label={t('abnormal.addNotesLabel')}

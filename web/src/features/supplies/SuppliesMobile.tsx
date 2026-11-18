@@ -8,6 +8,7 @@ import {
   IconShoppingBag, IconX,
 } from '@tabler/icons-react';
 import { Button } from '../../components/ui/button';
+import { NumberFieldField } from '../../components/ui/number-field-field';
 import { Spinner } from '../../components/ui/spinner';
 import { TabsNav } from '../../components/ui/tabs-nav';
 import { TextField } from '../../components/ui/text-field';
@@ -236,7 +237,7 @@ function MobileAddOverlay({ locationTree, isOnline, onClose }: { locationTree: L
       <div className={s.overlayBody}>
         <TextField label={t('supplies.supplyName')} placeholder={t('supplies.supplyNamePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} required />
         <TreeSelectField label={t('supplies.supplyLocation')} placeholder={t('supplies.supplyLocationPlaceholder')} tree={locationTree} value={locationId} onChange={setLocationId} />
-        <TextField label={t('supplies.initialStock')} type="number" min={0} value={stock} onChange={(e) => setStock(e.target.value)} />
+        <NumberFieldField label={t('supplies.initialStock')} min={0} value={stock} onChange={setStock} />
         <div className={s.overlayActions}>
           <Button variant="quiet" onClick={onClose}>{t('supplies.cancel')}</Button>
           <Button disabled={!isOnline || !name.trim() || create.isPending} onClick={() => create.mutate()}>
