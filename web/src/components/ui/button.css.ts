@@ -59,13 +59,13 @@ export const variant = styleVariants({
   default: [
     base,
     {
-      background: themeVars.accent,
-      borderColor: themeVars.accent,
-      color: themeVars.onAccent,
+      background: themeVars.accentBg,
+      borderColor: themeVars.accentBg,
+      color: themeVars.onAccentBg,
       selectors: {
         '&:hover:not(:disabled)': {
-          background: themeVars.accentHover,
-          borderColor: themeVars.accentHover,
+          background: themeVars.accentBgHover,
+          borderColor: themeVars.accentBgHover,
         },
       },
     },
