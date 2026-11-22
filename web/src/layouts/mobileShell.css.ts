@@ -205,11 +205,7 @@ export const drawerBrandMark = style({
   width: '2rem',
   height: '2rem',
   placeItems: 'center',
-  borderRadius: themeVars.radius2,
-  background: themeVars.accent,
-  color: themeVars.onAccent,
-  fontSize: themeVars.textSizeMd,
-  fontWeight: themeVars.weightBold,
+  color: themeVars.sidebarActiveText,
 });
 
 export const drawerBrandText = style({

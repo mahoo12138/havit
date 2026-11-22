@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { IconHome, IconMenu2, IconSearch } from '@tabler/icons-react';
+import { IconMenu2, IconSearch } from '@tabler/icons-react';
+import { BrandLogo } from '../components/BrandLogo';
 import {
   uiStyles,
 } from '../components/ui';
@@ -57,7 +58,7 @@ export function TabletShell({ systemStatus }: ShellProps) {
       <nav className={uiStyles.shellNav}>
         <div className={uiStyles.sidebarBrand}>
           <span className={uiStyles.sidebarBrandMark}>
-            <IconHome size={17} />
+            <BrandLogo size={28} />
           </span>
           <span className={uiStyles.sidebarBrandText}>Havit</span>
         </div>

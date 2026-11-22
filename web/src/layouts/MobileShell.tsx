@@ -14,6 +14,7 @@ import {
   IconUser,
   IconUserCircle,
 } from '@tabler/icons-react';
+import { BrandLogo } from '../components/BrandLogo';
 import { Button } from '../components/ui/button';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { authApi, clearPrivateCaches, clearToken, type SystemStatus } from '../api/client';
@@ -207,7 +208,7 @@ export function MobileShell({ systemStatus }: ShellProps) {
           <aside className={s.drawer}>
             <div className={s.drawerHeader}>
               <span className={s.drawerBrandMark}>
-                <IconHome size={17} />
+                <BrandLogo size={28} />
               </span>
               <span className={s.drawerBrandText}>Havit</span>
               <Button

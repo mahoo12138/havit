@@ -23,18 +23,12 @@ const sheetSettle = keyframes({
   '100%': { opacity: 1, transform: 'translateY(0) rotate(0deg)' },
 });
 
-/** 印章压下：从高处带倾角落下，回弹后停在略微歪斜的印位上 */
+/** 品牌标记入场：从高处轻轻下压，回弹后摆正定住 */
 const sealPress = keyframes({
-  '0%': { opacity: 0, transform: 'scale(1.8) rotate(-18deg)' },
-  '55%': { opacity: 1, transform: 'scale(0.93) rotate(-5deg)' },
-  '78%': { transform: 'scale(1.04) rotate(-7deg)' },
-  '100%': { opacity: 1, transform: 'scale(1) rotate(-6deg)' },
-});
-
-/** 印泥洇开：一圈靛蓝边向外化开后消失 */
-const inkRing = keyframes({
-  '0%': { opacity: 0.5, transform: 'scale(0.65)' },
-  '100%': { opacity: 0, transform: 'scale(2.1)' },
+  '0%': { opacity: 0, transform: 'scale(1.7)' },
+  '55%': { opacity: 1, transform: 'scale(0.93)' },
+  '78%': { transform: 'scale(1.04)' },
+  '100%': { opacity: 1, transform: 'scale(1)' },
 });
 
 /** 墨晕：按钮内部的柔光扩散 */
@@ -188,48 +182,16 @@ export const cardError = style({
   },
 });
 
-/* ── 印章式品牌标记 ─────────────────────────────────────────────────── */
-
-/** 印章待机呼吸：墨压完毕之后，印面仍旧缓缓地呼吸 */
-const sealBreathe = keyframes({
-  '0%, 100%': {
-    boxShadow: `inset 0 0 0 1.5px color-mix(in srgb, ${themeVars.onAccent} 40%, transparent), 0 4px 12px color-mix(in srgb, ${themeVars.accent} 24%, transparent)`,
-  },
-  '50%': {
-    boxShadow: `inset 0 0 0 1.5px color-mix(in srgb, ${themeVars.onAccent} 58%, transparent), 0 5px 17px color-mix(in srgb, ${themeVars.accent} 34%, transparent)`,
-  },
-});
+/* ── 品牌标记：裸 logo 本体，描边随主题变色 ─────────────────────────── */
 
 export const sealMark = style({
-  position: 'relative',
   display: 'grid',
-  width: '3rem',
-  height: '3rem',
   marginInline: 'auto',
   marginBottom: themeVars.space2,
   placeItems: 'center',
-  borderRadius: themeVars.radius2,
-  background: themeVars.accent,
-  color: themeVars.onAccent,
-  fontFamily: themeVars.fontSerif,
-  fontSize: themeVars.textSize2xl,
-  lineHeight: themeVars.leadingNone,
-  // 内圈细边 = 印面的边框，外投影 = 墨迹压在纸上的重量
-  boxShadow: `inset 0 0 0 1.5px color-mix(in srgb, ${themeVars.onAccent} 42%, transparent), 0 4px 12px color-mix(in srgb, ${themeVars.accent} 26%, transparent)`,
+  color: themeVars.ink,
   transformOrigin: '50% 55%',
-  animation: `${sealPress} 760ms ${EASE_STAMP} 60ms both, ${sealBreathe} 6.5s ease-in-out 1.15s infinite`,
-  selectors: {
-    '&::before': {
-      content: '""',
-      position: 'absolute',
-      inset: '-5px',
-      border: `1.5px solid ${themeVars.accent}`,
-      borderRadius: themeVars.radius3,
-      opacity: 0,
-      pointerEvents: 'none',
-      animation: `${inkRing} 1100ms ease-out 480ms both`,
-    },
-  },
+  animation: `${sealPress} 760ms ${EASE_STAMP} 60ms both`,
 });
 
 /* ── 落款流水号：右上角的册页编号，翻牌般递增到「今日这页」 ─────────── */

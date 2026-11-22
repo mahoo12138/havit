@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-label="Havit">
-  <rect width="192" height="192" rx="40" fill="#2447b8"/>
-  <path d="M48 57h24v30h48V57h24v78h-24v-30H72v30H48z" fill="#fff"/>
-  <path d="M48 145h96v12H48z" fill="#e9eefb"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 200 200" role="img" aria-label="Havit">
+  <rect width="200" height="200" rx="40" fill="#FFFFFF" />
+  <path d="M 66 88 C 84 88, 94 100, 94 120 L 94 142 A 10 10 0 0 0 111.81 148.25 L 154.3 95.1" stroke="#767A7E" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M 46 46 L 46 152 M 46 108 C 52 95, 60 88, 68 88" stroke="#000000" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
 </svg>

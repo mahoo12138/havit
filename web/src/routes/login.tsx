@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { BrandLogo } from '../components/BrandLogo';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { IconCheck, IconInfoCircle } from '@tabler/icons-react';
@@ -240,7 +241,7 @@ function LoginPage() {
           <Stack>
           <StackTight className={uiStyles.textCenter}>
             <span className={`${s.sealMark} ${s.rise.r1}`} aria-hidden>
-              H
+              <BrandLogo size={72} />
             </span>
             <h1 className={`${textStyles.pageTitle} ${s.rise.r2}`}>
               {t('auth.login')} Havit
