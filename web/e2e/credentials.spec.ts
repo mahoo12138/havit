@@ -173,16 +173,17 @@ test.describe('Credentials & warranty closed loop', () => {
     await card.getByRole('button', { name: 'Edit Warranty' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    await dialog.getByLabel('Serial Number').fill('SN-E2E-123456');
+    // Serial number editing lives in the item edit dialog; the warranty
+    // dialog only touches expiry and contact.
     await dialog.getByLabel('Contact').fill('400-123-4567');
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden();
 
-    await expect(card).toContainText('SN-E2E-123456');
+    await expect(card).toContainText('400-123-4567');
     const refreshed = await expectJson<{ serial_number?: string; warranty_contact?: string }>(
       api.get(`items/${item.id}`, { headers }),
     );
-    expect(refreshed.serial_number).toBe('SN-E2E-123456');
+    expect(refreshed.serial_number).toBeUndefined();
     expect(refreshed.warranty_contact).toBe('400-123-4567');
   });
 });
