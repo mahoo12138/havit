@@ -7,6 +7,7 @@ import { Spinner } from '../../components/ui/spinner';
 import { TabsNav } from '../../components/ui/tabs-nav';
 import { itemsApi, suppliesExtendedApi } from '../../api/client';
 import { DataCard, FeatureHeader } from '../m2/components';
+import * as css from './credentials.css';
 import { CredentialsTab } from './CredentialsTab';
 import { WarrantyTab } from './WarrantyTab';
 
@@ -16,15 +17,16 @@ export function CredentialsDesktop() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<CredentialsTabKey>('warranty');
 
-  const { data: warrantyData, isLoading: warrantyLoading } = useQuery({
+  const { data: warrantyData, isLoading: warrantyLoading, isError: warrantyError } = useQuery({
     queryKey: ['items', 'warranty'],
     queryFn: () => suppliesExtendedApi.warranty(),
     enabled: tab === 'warranty',
   });
 
   // Virtual items power both the credential picker and the empty-state hint.
-  const { data: virtualData } = useQuery({
-    queryKey: ['items', 'virtual-items'],
+  // Same key/fetcher as the virtual-assets page so both share one cache entry.
+  const { data: virtualData, isLoading: virtualLoading, isError: virtualError } = useQuery({
+    queryKey: ['items', 'virtual'],
     queryFn: () => itemsApi.list({ type: 'virtual' }),
     enabled: tab === 'credentials',
   });
@@ -53,7 +55,11 @@ export function CredentialsDesktop() {
       {isLoading ? (
         <Spinner />
       ) : tab === 'warranty' ? (
-        warrantyItems.length === 0 ? (
+        warrantyError ? (
+          <DataCard title={t('credentials.warrantyAggregate')}>
+            <div className={css.emptyNote}>{t('credentials.loadFailed')}</div>
+          </DataCard>
+        ) : warrantyItems.length === 0 ? (
           <DataCard title={t('credentials.warrantyAggregate')}>
             <div style={{ display: 'grid', justifyItems: 'center', gap: '0.75rem', padding: '2rem 0' }}>
               <IconShieldCheck size={28} />
@@ -67,7 +73,11 @@ export function CredentialsDesktop() {
           <WarrantyTab items={warrantyItems} />
         )
       ) : (
-        <CredentialsTab virtualItems={virtualItems} />
+        <CredentialsTab
+          virtualItems={virtualItems}
+          virtualLoading={virtualLoading}
+          virtualError={virtualError}
+        />
       )}
     </Stack>
   );

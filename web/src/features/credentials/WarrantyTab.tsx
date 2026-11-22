@@ -8,52 +8,14 @@ import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Dialog } from '../../components/ui/dialog-compat';
 import { DatePickerField } from '../../components/ui/date-picker-field';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select';
 import { TextField } from '../../components/ui/text-field';
 import { useToast } from '../../components/ui/use-toast';
 import { itemsApi, type Item } from '../../api/client';
 import { formatDate, getWarrantyStatus } from '../assets/useAssetsData';
 import { CredentialMetrics } from './CredentialMetrics';
+import { InlineSelect } from './InlineSelect';
 import { fromUnixSeconds, toUnixSeconds, warrantyDaysLeft, type WarrantyFilter } from './shared';
 import * as s from './credentials.css';
-
-function InlineSelect({
-  value,
-  placeholder,
-  options,
-  onChange,
-}: {
-  value: string;
-  placeholder: string;
-  options: Array<{ value: string; label: string }>;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <Select
-      value={value || null}
-      onValueChange={(nextValue) => onChange(nextValue ?? '')}
-      items={[{ value: null, label: placeholder }, ...options]}
-    >
-      <SelectTrigger size="sm" className={uiStyles.loanFilterSelect} aria-label={placeholder}>
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
-        <SelectItem value={null}>{placeholder}</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
 
 export function WarrantyEditDialog({ item, onClose }: { item: Item; onClose: () => void }) {
   const { t } = useTranslation();
@@ -61,15 +23,17 @@ export function WarrantyEditDialog({ item, onClose }: { item: Item; onClose: () 
   const queryClient = useQueryClient();
 
   const [expiresAt, setExpiresAt] = useState(fromUnixSeconds(item.warranty_expires_at));
-  const [serialNumber, setSerialNumber] = useState(item.serial_number ?? '');
   const [contact, setContact] = useState(item.warranty_contact ?? '');
 
   const mutation = useMutation({
     mutationFn: () =>
       itemsApi.update(item.id, {
-        warranty_expires_at: toUnixSeconds(expiresAt),
-        serial_number: serialNumber.trim() || undefined,
-        warranty_contact: contact.trim() || undefined,
+        // Explicit nulls clear the stored values; an omitted key would mean
+        // "leave unchanged" on the backend and silently do nothing. The
+        // serial number is intentionally absent here — it belongs to the
+        // item edit dialog and the overview spec grid.
+        warranty_expires_at: toUnixSeconds(expiresAt) ?? null,
+        warranty_contact: contact.trim() || null,
       }),
     onSuccess: () => {
       // Updating the expiry date also rebuilds the 30d/7d warranty reminders
@@ -91,11 +55,6 @@ export function WarrantyEditDialog({ item, onClose }: { item: Item; onClose: () 
           value={expiresAt}
           onChange={setExpiresAt}
           placeholder={t('credentials.warrantyExpiryPlaceholder')}
-        />
-        <TextField
-          label={t('credentials.serialNumber')}
-          value={serialNumber}
-          onChange={(e) => setSerialNumber(e.target.value)}
         />
         <TextField
           label={t('credentials.contactInfo')}

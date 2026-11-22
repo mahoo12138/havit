@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Stack } from '../../components/ui';
+import { Stack, uiStyles } from '../../components/ui';
 import { Button } from '../../components/ui/button';
 import { Dialog } from '../../components/ui/dialog-compat';
 import { DatePickerField } from '../../components/ui/date-picker-field';
@@ -43,6 +43,7 @@ export function CredentialFormDialog({
   const [account, setAccount] = useState('');
   const [orderId, setOrderId] = useState('');
   const [licenseKey, setLicenseKey] = useState('');
+  const [clearKey, setClearKey] = useState(false);
   const [purchasedAt, setPurchasedAt] = useState('');
   const [price, setPrice] = useState('');
   const [currency, setCurrency] = useState('CNY');
@@ -53,11 +54,15 @@ export function CredentialFormDialog({
     setPlatform(credential?.platform ?? '');
     setAccount(credential?.account ?? '');
     setOrderId(credential?.order_id ?? '');
-    // Editing never round-trips the stored secret: empty means "keep as is".
+    // Editing never round-trips the stored secret: empty means "keep as is",
+    // and the explicit clear toggle below sends an empty string to wipe it.
     setLicenseKey('');
+    setClearKey(false);
     setPurchasedAt(credential?.purchased_at ? new Date(credential.purchased_at * 1000).toISOString().split('T')[0] : '');
     setPrice(credential?.price != null ? String(credential.price) : '');
-    setCurrency(credential?.currency ?? 'CNY');
+    // Prefill CNY only for new records; editing must not write a currency the
+    // user never chose into a record stored without one.
+    setCurrency(credential ? credential.currency ?? '' : 'CNY');
   }, [open, credential, itemId]);
 
   const mutation = useMutation({
@@ -83,9 +88,10 @@ export function CredentialFormDialog({
       platform: platform.trim(),
       account: account.trim() || undefined,
       order_id: orderId.trim() || undefined,
-      // Empty input never touches the stored secret (create: no secret,
-      // edit: backend keeps the existing one when the field is omitted).
-      license_key: licenseKey.trim() || undefined,
+      // Empty input never touches the stored secret (create: no secret, edit:
+      // backend keeps the existing one when the field is omitted). The clear
+      // toggle sends an empty string, which the backend treats as a wipe.
+      license_key: clearKey ? '' : licenseKey.trim() || undefined,
       purchased_at: toUnixSeconds(purchasedAt),
       price: price !== '' ? Number(price) : undefined,
       currency: currency.trim() || undefined,
@@ -117,9 +123,24 @@ export function CredentialFormDialog({
         <TextField
           label={t('credentials.licenseKey')}
           value={licenseKey}
-          onChange={(e) => setLicenseKey(e.target.value)}
+          onChange={(e) => {
+            setLicenseKey(e.target.value);
+            setClearKey(false);
+          }}
           placeholder={credential ? t('credentials.licenseKeyKeepHint') : t('credentials.licenseKeyPlaceholder')}
         />
+        {credential?.license_key && licenseKey.trim() === '' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <Button variant="subtle" size="sm" onClick={() => setClearKey((prev) => !prev)}>
+              {clearKey ? t('credentials.licenseKeyUndoClear') : t('credentials.licenseKeyClear')}
+            </Button>
+            {clearKey && (
+              <p className={uiStyles.helpParagraph} style={{ margin: 0 }}>
+                {t('credentials.licenseKeyClearHint')}
+              </p>
+            )}
+          </div>
+        )}
         <DatePickerField label={t('credentials.purchasedAt')} value={purchasedAt} onChange={setPurchasedAt} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
           <NumberFieldField label={t('credentials.price')} value={price} onChange={setPrice} />
