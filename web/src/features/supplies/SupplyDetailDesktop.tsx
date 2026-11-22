@@ -29,6 +29,7 @@ import { Card } from '../../components/ui/card';
 import { Tag } from '../../components/ui/tag';
 import { DatePickerField } from '../../components/ui/date-picker-field';
 import { Dialog } from '../../components/ui/dialog-compat';
+import { DetailSection } from '../../components/ui/detail-section';
 import { SelectField } from '../../components/ui/select-field';
 import { Spinner } from '../../components/ui/spinner';
 import {
@@ -53,6 +54,8 @@ import {
 import { useNetworkStatus } from '../../utils/useNetworkStatus';
 import { textStyles } from '../../styles/typography.css';
 import { themeVars } from '../../styles/theme.css';
+import * as dc from '../../styles/detail.css';
+import { dateOnlyToUnix } from '../../utils/date';
 
 const DAY = 24 * 60 * 60;
 
@@ -165,7 +168,9 @@ export function SupplyDetailDesktop({ itemId }: { itemId: string }) {
     enabled: isTypeA,
   });
   const events = useQuery({
-    queryKey: ['supplies', itemId, 'events'],
+    // Same key as the item-detail event timeline so both views share one
+    // cache and every ['item'] invalidation reaches both.
+    queryKey: ['item', itemId, 'events'],
     queryFn: () => suppliesExtendedApi.listEvents(itemId),
     enabled: isTypeB,
   });
@@ -190,7 +195,7 @@ export function SupplyDetailDesktop({ itemId }: { itemId: string }) {
     mutationFn: () => suppliesExtendedApi.useOne(itemId),
     onSuccess: (next) => {
       qc.setQueryData(['item', itemId], next);
-      qc.invalidateQueries({ queryKey: ['supplies', itemId, 'events'] });
+      qc.invalidateQueries({ queryKey: ['item', itemId, 'events'] });
       qc.invalidateQueries({ queryKey: ['items', 'supplies'] });
       toast.show(t('supplies.stockAdjusted'));
     },
@@ -255,8 +260,10 @@ export function SupplyDetailDesktop({ itemId }: { itemId: string }) {
       toast.show(t('supplies.actionFailed', { error: e.message })),
   });
 
-  if (item.isLoading || !item.data) return <Spinner />;
-  if (item.error) {
+  if (item.isLoading) return <Spinner />;
+  if (item.error || !item.data) {
+    // Error must be checked before treating undefined data as "keep loading",
+    // otherwise a failed fetch spins forever.
     return <p className={uiStyles.errorText}>{t('errors.not_found')}</p>;
   }
 
@@ -375,319 +382,278 @@ export function SupplyDetailDesktop({ itemId }: { itemId: string }) {
         <div className={uiStyles.itemMain}>
           {isTypeA && (
             <>
-              <Card className={uiStyles.itemSection} padded={false}>
-                <header className={uiStyles.itemSectionHead}>
-                  <h3 className={uiStyles.itemSectionTitle}>
-                    <span className={uiStyles.itemSectionTitleIcon}>
-                      <IconShoppingBag size={14} />
-                    </span>
-                    {t('supplies.action')}
-                  </h3>
-                </header>
-                <div className={uiStyles.itemSectionBody}>
-                  <div className={uiStyles.supplyActionRow}>
-                    <Button
-                      variant="subtle"
-                      className={uiStyles.supplyActionPrimary}
-                      onClick={() => setPurchaseOpen(true)}
-                      disabled={!isOnline}
-                      title={offlineTitle}
-                    >
-                      <IconShoppingBag size={18} />
-                      {t('supplies.recordPurchase')}
-                    </Button>
-                    <Button
-                      variant="subtle"
-                      className={uiStyles.supplyActionDanger}
-                      onClick={() => calibrate.mutate('almost_empty')}
-                      disabled={!isOnline || calibrate.isPending}
-                      title={offlineTitle}
-                    >
-                      <IconAlertTriangle size={18} />
-                      {t('supplies.almostEmpty')}
-                    </Button>
-                    <Button
-                      variant="subtle"
-                      className={uiStyles.supplyActionSuccess}
-                      onClick={() => calibrate.mutate('plenty_left')}
-                      disabled={!isOnline || calibrate.isPending}
-                      title={offlineTitle}
-                    >
-                      <IconCheck size={18} />
-                      {t('supplies.plentyLeft')}
-                    </Button>
-                  </div>
+              <DetailSection
+                icon={<IconShoppingBag size={15} />}
+                title={t('supplies.action')}
+              >
+                <div className={uiStyles.supplyActionRow}>
+                  <Button
+                    variant="subtle"
+                    className={uiStyles.supplyActionPrimary}
+                    onClick={() => setPurchaseOpen(true)}
+                    disabled={!isOnline}
+                    title={offlineTitle}
+                  >
+                    <IconShoppingBag size={18} />
+                    {t('supplies.recordPurchase')}
+                  </Button>
+                  <Button
+                    variant="subtle"
+                    className={uiStyles.supplyActionDanger}
+                    onClick={() => calibrate.mutate('almost_empty')}
+                    disabled={!isOnline || calibrate.isPending}
+                    title={offlineTitle}
+                  >
+                    <IconAlertTriangle size={18} />
+                    {t('supplies.almostEmpty')}
+                  </Button>
+                  <Button
+                    variant="subtle"
+                    className={uiStyles.supplyActionSuccess}
+                    onClick={() => calibrate.mutate('plenty_left')}
+                    disabled={!isOnline || calibrate.isPending}
+                    title={offlineTitle}
+                  >
+                    <IconCheck size={18} />
+                    {t('supplies.plentyLeft')}
+                  </Button>
                 </div>
-              </Card>
+              </DetailSection>
 
-              <Card className={uiStyles.itemSection} padded={false}>
-                <header className={uiStyles.itemSectionHead}>
-                  <h3 className={uiStyles.itemSectionTitle}>
-                    <span className={uiStyles.itemSectionTitleIcon}>
-                      <IconClipboardList size={14} />
-                    </span>
-                    {t('supplies.viewPurchaseHistory')}
-                  </h3>
-                </header>
-                <div className={uiStyles.itemSectionBody}>
-                  {purchaseEvents.length === 0 ? (
-                    <div className={uiStyles.supplyDetailEmpty}>
-                      {t('supplies.noPurchaseData')}
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>
-                            {t('supplies.purchaseDate')}
-                          </TableHead>
-                          <TableHead>
-                            {t('supplies.purchaseQuantity')}
-                          </TableHead>
-                          <TableHead>
-                            {t('supplies.purchasePrice')}
-                          </TableHead>
-                          <TableHead>
-                            {t('supplies.purchaseNotes')}
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {[...purchaseEvents]
-                          .sort((a, b) => b.purchased_at - a.purchased_at)
-                          .map((ev) => (
-                            <TableRow key={ev.id}>
-                              <TableCell>
-                                {formatDate(ev.purchased_at)}
-                              </TableCell>
-                              <TableCell
-                                style={{ fontVariantNumeric: 'tabular-nums' }}
-                              >
-                                {ev.quantity}
-                              </TableCell>
-                              <TableCell>
-                                {ev.price != null
-                                  ? fmtAmount(
-                                      ev.price,
-                                      ev.currency ?? currency,
-                                      locale,
-                                    )
-                                  : '—'}
-                              </TableCell>
-                              <TableCell
-                                style={{
-                                  color: 'var(--havit-muted)',
-                                  fontSize: themeVars.textSizeSm,
-                                }}
-                              >
-                                {ev.notes ?? '—'}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              </Card>
-
-              <Card className={uiStyles.itemSection} padded={false}>
-                <header className={uiStyles.itemSectionHead}>
-                  <h3 className={uiStyles.itemSectionTitle}>
-                    <span className={uiStyles.itemSectionTitleIcon}>
-                      <IconHistory size={14} />
-                    </span>
-                    {t('supplies.calibrate')}
-                  </h3>
-                </header>
-                <div className={uiStyles.itemSectionBody}>
-                  {calibrationEvents.length === 0 ? (
-                    <div className={uiStyles.supplyDetailEmpty}>
-                      {t('supplies.noCalibration')}
-                    </div>
-                  ) : (
-                    <div className={uiStyles.supplyTimeline}>
-                      {[...calibrationEvents]
-                        .sort((a, b) => b.created_at - a.created_at)
-                        .map((ev) => {
-                          const variant =
-                            ev.signal === 'almost_empty'
-                              ? 'almostEmpty'
-                              : 'plentyLeft';
-                          return (
-                            <div
-                              key={ev.id}
-                              className={uiStyles.supplyTimelineItem}
-                            >
-                              <span className={uiStyles.supplyTimelineDot} />
-                              <div className={uiStyles.supplyTimelineBody}>
-                                <span
-                                  className={
-                                    uiStyles.supplyCalibrationPill[variant]
-                                  }
-                                >
-                                  {variant === 'almostEmpty'
-                                    ? t('supplies.almostEmpty')
-                                    : t('supplies.plentyLeft')}
-                                </span>
-                                <span className={uiStyles.supplyTimelineMeta}>
-                                  {formatDateTime(ev.created_at)}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              </Card>
-            </>
-          )}
-
-          {isTypeB && (
-            <>
-              <Card className={uiStyles.itemSection} padded={false}>
-                <header className={uiStyles.itemSectionHead}>
-                  <h3 className={uiStyles.itemSectionTitle}>
-                    <span className={uiStyles.itemSectionTitleIcon}>
-                      <IconPackage size={14} />
-                    </span>
-                    {t('supplies.stock')}
-                  </h3>
-                  {threshold > 0 && stock <= threshold && (
-                    <span className={uiStyles.itemStockLow}>
-                      <IconAlertTriangle size={12} />
-                      {t('supplies.statusBelowThreshold')}
-                    </span>
-                  )}
-                </header>
-                <div className={uiStyles.itemSectionBody}>
-                  <div className={uiStyles.supplyStockHero}>
-                    <span className={uiStyles.supplyStockHeroValue}>
-                      {stock}
-                    </span>
-                    <span className={uiStyles.supplyStockHeroUnit}>
-                      {t('supplies.stock')}
-                    </span>
+              <DetailSection
+                icon={<IconClipboardList size={15} />}
+                title={t('supplies.viewPurchaseHistory')}
+              >
+                {purchaseEvents.length === 0 ? (
+                  <div className={dc.emptyState}>
+                    {t('supplies.noPurchaseData')}
                   </div>
-                  <div className={uiStyles.supplyStockHeroSub}>
-                    {t('supplies.minThreshold')}:{' '}
-                    {it.min_stock_threshold ?? '—'}
-                  </div>
-                  <div className={uiStyles.supplyActionRow}>
-                    <Button
-                      variant="subtle"
-                      className={uiStyles.supplyActionDanger}
-                      onClick={() => useOne.mutate()}
-                      disabled={!isOnline || stock <= 0 || useOne.isPending}
-                      title={offlineTitle}
-                    >
-                      <IconMinus size={18} />
-                      {t('supplies.useOneAction')}
-                    </Button>
-                    <Button
-                      variant="subtle"
-                      className={uiStyles.supplyActionPrimary}
-                      onClick={() => setStockOpen(true)}
-                      disabled={!isOnline}
-                      title={offlineTitle}
-                    >
-                      <IconShoppingBag size={18} />
-                      {t('supplies.addStock')}
-                    </Button>
-                    <Button
-                      variant="subtle"
-                      className={uiStyles.supplyActionBigBtn}
-                      onClick={() => setThresholdOpen(true)}
-                      disabled={!isOnline}
-                      title={offlineTitle}
-                    >
-                      <IconTrendingUp size={18} />
-                      {t('supplies.setThresholdTitle')}
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-
-              {lifespan != null && lifespan > 0 && (
-                <Card className={uiStyles.itemSection} padded={false}>
-                  <header className={uiStyles.itemSectionHead}>
-                    <h3 className={uiStyles.itemSectionTitle}>
-                      <span className={uiStyles.itemSectionTitleIcon}>
-                        <IconCalendar size={14} />
-                      </span>
-                      {t('supplies.lifespanDays')}
-                    </h3>
-                  </header>
-                  <div className={uiStyles.itemSectionBody}>
-                    <div className={uiStyles.supplyLifeCountdown}>
-                      {lifeRemaining == null ? (
-                        <span className={uiStyles.supplyLifeCountdownLabel}>
-                          {t('supplies.noLifespan')}
-                        </span>
-                      ) : lifeRemaining < 0 ? (
-                        <>
-                          <span className={uiStyles.supplyLifeCountdownValue}>
-                            0
-                          </span>
-                          <span className={uiStyles.supplyLifeCountdownLabel}>
-                            {t('supplies.lifeExpired')}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className={uiStyles.supplyLifeCountdownValue}>
-                            {lifeRemaining}
-                          </span>
-                          <span className={uiStyles.supplyLifeCountdownLabel}>
-                            {t('supplies.lifeRemaining', {
-                              count: lifeRemaining,
-                            })}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              )}
-
-              <Card className={uiStyles.itemSection} padded={false}>
-                <header className={uiStyles.itemSectionHead}>
-                  <h3 className={uiStyles.itemSectionTitle}>
-                    <span className={uiStyles.itemSectionTitleIcon}>
-                      <IconHistory size={14} />
-                    </span>
-                    {t('supplies.activityLog')}
-                  </h3>
-                </header>
-                <div className={uiStyles.itemSectionBody}>
-                  {itemEvents.length === 0 ? (
-                    <div className={uiStyles.supplyDetailEmpty}>
-                      {t('supplies.noActivity')}
-                    </div>
-                  ) : (
-                    <div className={uiStyles.supplyTimeline}>
-                      {[...itemEvents]
-                        .sort((a, b) => b.created_at - a.created_at)
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>
+                          {t('supplies.purchaseDate')}
+                        </TableHead>
+                        <TableHead>
+                          {t('supplies.purchaseQuantity')}
+                        </TableHead>
+                        <TableHead>
+                          {t('supplies.purchasePrice')}
+                        </TableHead>
+                        <TableHead>
+                          {t('supplies.purchaseNotes')}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[...purchaseEvents]
+                        .sort((a, b) => b.purchased_at - a.purchased_at)
                         .map((ev) => (
+                          <TableRow key={ev.id}>
+                            <TableCell>
+                              {formatDate(ev.purchased_at)}
+                            </TableCell>
+                            <TableCell
+                              style={{ fontVariantNumeric: 'tabular-nums' }}
+                            >
+                              {ev.quantity}
+                            </TableCell>
+                            <TableCell>
+                              {ev.price != null
+                                ? fmtAmount(
+                                    ev.price,
+                                    ev.currency ?? currency,
+                                    locale,
+                                  )
+                                : '—'}
+                            </TableCell>
+                            <TableCell
+                              style={{
+                                color: 'var(--havit-muted)',
+                                fontSize: themeVars.textSizeSm,
+                              }}
+                            >
+                              {ev.notes ?? '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </DetailSection>
+
+              <DetailSection
+                icon={<IconHistory size={15} />}
+                title={t('supplies.calibrate')}
+              >
+                {calibrationEvents.length === 0 ? (
+                  <div className={dc.emptyState}>
+                    {t('supplies.noCalibration')}
+                  </div>
+                ) : (
+                  <div className={uiStyles.supplyTimeline}>
+                    {[...calibrationEvents]
+                      .sort((a, b) => b.created_at - a.created_at)
+                      .map((ev) => {
+                        const variant =
+                          ev.signal === 'almost_empty'
+                            ? 'almostEmpty'
+                            : 'plentyLeft';
+                        return (
                           <div
                             key={ev.id}
                             className={uiStyles.supplyTimelineItem}
                           >
                             <span className={uiStyles.supplyTimelineDot} />
                             <div className={uiStyles.supplyTimelineBody}>
-                              <span style={{ fontSize: themeVars.textSizeSm }}>
-                                {ev.event_type}
+                              <span
+                                className={
+                                  uiStyles.supplyCalibrationPill[variant]
+                                }
+                              >
+                                {variant === 'almostEmpty'
+                                  ? t('supplies.almostEmpty')
+                                  : t('supplies.plentyLeft')}
                               </span>
                               <span className={uiStyles.supplyTimelineMeta}>
                                 {formatDateTime(ev.created_at)}
                               </span>
                             </div>
                           </div>
-                        ))}
-                    </div>
-                  )}
+                        );
+                      })}
+                  </div>
+                )}
+              </DetailSection>
+            </>
+          )}
+
+          {isTypeB && (
+            <>
+              <DetailSection
+                icon={<IconPackage size={15} />}
+                title={t('supplies.stock')}
+                action={
+                  threshold > 0 && stock <= threshold && (
+                    <span className={uiStyles.itemStockLow}>
+                      <IconAlertTriangle size={12} />
+                      {t('supplies.statusBelowThreshold')}
+                    </span>
+                  )
+                }
+              >
+                <div className={uiStyles.supplyStockHero}>
+                  <span className={uiStyles.supplyStockHeroValue}>
+                    {stock}
+                  </span>
+                  <span className={uiStyles.supplyStockHeroUnit}>
+                    {t('supplies.stock')}
+                  </span>
                 </div>
-              </Card>
+                <div className={uiStyles.supplyStockHeroSub}>
+                  {t('supplies.minThreshold')}: {it.min_stock_threshold ?? '—'}
+                </div>
+                <div className={uiStyles.supplyActionRow}>
+                  <Button
+                    variant="subtle"
+                    className={uiStyles.supplyActionDanger}
+                    onClick={() => useOne.mutate()}
+                    disabled={!isOnline || stock <= 0 || useOne.isPending}
+                    title={offlineTitle}
+                  >
+                    <IconMinus size={18} />
+                    {t('supplies.useOneAction')}
+                  </Button>
+                  <Button
+                    variant="subtle"
+                    className={uiStyles.supplyActionPrimary}
+                    onClick={() => setStockOpen(true)}
+                    disabled={!isOnline}
+                    title={offlineTitle}
+                  >
+                    <IconShoppingBag size={18} />
+                    {t('supplies.addStock')}
+                  </Button>
+                  <Button
+                    variant="subtle"
+                    className={uiStyles.supplyActionBigBtn}
+                    onClick={() => setThresholdOpen(true)}
+                    disabled={!isOnline}
+                    title={offlineTitle}
+                  >
+                    <IconTrendingUp size={18} />
+                    {t('supplies.setThresholdTitle')}
+                  </Button>
+                </div>
+              </DetailSection>
+
+              {lifespan != null && lifespan > 0 && (
+                <DetailSection
+                  icon={<IconCalendar size={15} />}
+                  title={t('supplies.lifespanDays')}
+                >
+                  <div className={uiStyles.supplyLifeCountdown}>
+                    {lifeRemaining == null ? (
+                      <span className={uiStyles.supplyLifeCountdownLabel}>
+                        {t('supplies.noLifespan')}
+                      </span>
+                    ) : lifeRemaining < 0 ? (
+                      <>
+                        <span className={uiStyles.supplyLifeCountdownValue}>
+                          0
+                        </span>
+                        <span className={uiStyles.supplyLifeCountdownLabel}>
+                          {t('supplies.lifeExpired')}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className={uiStyles.supplyLifeCountdownValue}>
+                          {lifeRemaining}
+                        </span>
+                        <span className={uiStyles.supplyLifeCountdownLabel}>
+                          {t('supplies.lifeRemaining', {
+                            count: lifeRemaining,
+                          })}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </DetailSection>
+              )}
+
+              <DetailSection
+                icon={<IconHistory size={15} />}
+                title={t('supplies.activityLog')}
+              >
+                {itemEvents.length === 0 ? (
+                  <div className={dc.emptyState}>
+                    {t('supplies.noActivity')}
+                  </div>
+                ) : (
+                  <div className={uiStyles.supplyTimeline}>
+                    {[...itemEvents]
+                      .sort((a, b) => b.created_at - a.created_at)
+                      .map((ev) => (
+                        <div
+                          key={ev.id}
+                          className={uiStyles.supplyTimelineItem}
+                        >
+                          <span className={uiStyles.supplyTimelineDot} />
+                          <div className={uiStyles.supplyTimelineBody}>
+                            <span style={{ fontSize: themeVars.textSizeSm }}>
+                              {ev.event_type}
+                            </span>
+                            <span className={uiStyles.supplyTimelineMeta}>
+                              {formatDateTime(ev.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </DetailSection>
             </>
           )}
         </div>
@@ -695,170 +661,130 @@ export function SupplyDetailDesktop({ itemId }: { itemId: string }) {
         <div className={uiStyles.itemRail}>
           {isTypeA && (
             <>
-              <Card className={uiStyles.itemSection} padded={false}>
-                <header className={uiStyles.itemSectionHead}>
-                  <h3 className={uiStyles.itemSectionTitle}>
-                    <span className={uiStyles.itemSectionTitleIcon}>
-                      <IconTrendingUp size={14} />
-                    </span>
-                    {t('supplies.restockForecast')}
-                  </h3>
-                </header>
-                <div className={uiStyles.itemSectionBody}>
-                  {nextPurchase == null ? (
-                    <div className={uiStyles.supplyDetailEmpty}>
-                      {t('supplies.insufficientHistory')}
+              <DetailSection
+                icon={<IconTrendingUp size={15} />}
+                title={t('supplies.restockForecast')}
+              >
+                {nextPurchase == null ? (
+                  <div className={dc.emptyState}>
+                    {t('supplies.insufficientHistory')}
+                  </div>
+                ) : (
+                  <Stack>
+                    <div className={uiStyles.supplyLifeCountdown}>
+                      <span className={uiStyles.supplyLifeCountdownValue}>
+                        {daysToNext ?? 0}
+                      </span>
+                      <span className={uiStyles.supplyLifeCountdownLabel}>
+                        {daysToNext === 0
+                          ? t('supplies.dueNow')
+                          : t('supplies.daysLeft', {
+                              count: daysToNext ?? 0,
+                            })}
+                      </span>
                     </div>
-                  ) : (
-                    <Stack>
-                      <div className={uiStyles.supplyLifeCountdown}>
-                        <span className={uiStyles.supplyLifeCountdownValue}>
-                          {daysToNext ?? 0}
-                        </span>
-                        <span className={uiStyles.supplyLifeCountdownLabel}>
-                          {daysToNext === 0
-                            ? t('supplies.dueNow')
-                            : t('supplies.daysLeft', {
-                                count: daysToNext ?? 0,
-                              })}
-                        </span>
-                      </div>
+                    <div className={uiStyles.supplyStatCard}>
+                      <span className={uiStyles.supplyStatLabel}>
+                        {t('supplies.estimatedDate')}
+                      </span>
+                      <span className={uiStyles.supplyStatValue}>
+                        {formatDate(nextPurchase)}
+                      </span>
+                    </div>
+                    {medDays > 0 && (
                       <div className={uiStyles.supplyStatCard}>
                         <span className={uiStyles.supplyStatLabel}>
-                          {t('supplies.estimatedDate')}
+                          {t('supplies.medianInterval')}
                         </span>
                         <span className={uiStyles.supplyStatValue}>
-                          {formatDate(nextPurchase)}
+                          {t('supplies.days', { count: medDays })}
+                        </span>
+                        <span className={uiStyles.supplyStatHint}>
+                          {t('supplies.samples', {
+                            count: intervals.length,
+                          })}
                         </span>
                       </div>
-                      {medDays > 0 && (
-                        <div className={uiStyles.supplyStatCard}>
-                          <span className={uiStyles.supplyStatLabel}>
-                            {t('supplies.medianInterval')}
-                          </span>
-                          <span className={uiStyles.supplyStatValue}>
-                            {t('supplies.days', { count: medDays })}
-                          </span>
-                          <span className={uiStyles.supplyStatHint}>
-                            {t('supplies.samples', {
-                              count: intervals.length,
-                            })}
-                          </span>
-                        </div>
-                      )}
-                    </Stack>
-                  )}
-                </div>
-              </Card>
+                    )}
+                  </Stack>
+                )}
+              </DetailSection>
 
-              <Card className={uiStyles.itemSection} padded={false}>
-                <header className={uiStyles.itemSectionHead}>
-                  <h3 className={uiStyles.itemSectionTitle}>
-                    <span className={uiStyles.itemSectionTitleIcon}>
-                      <IconClipboardList size={14} />
+              <DetailSection
+                icon={<IconClipboardList size={15} />}
+                title={t('supplies.totalAmount')}
+              >
+                <div className={uiStyles.supplyStatGrid}>
+                  <div className={uiStyles.supplyStatCard}>
+                    <span className={uiStyles.supplyStatLabel}>
+                      {t('supplies.totalPurchases')}
                     </span>
-                    {t('supplies.totalAmount')}
-                  </h3>
-                </header>
-                <div className={uiStyles.itemSectionBody}>
-                  <div className={uiStyles.supplyStatGrid}>
-                    <div className={uiStyles.supplyStatCard}>
-                      <span className={uiStyles.supplyStatLabel}>
-                        {t('supplies.totalPurchases')}
-                      </span>
-                      <span className={uiStyles.supplyStatValue}>
-                        {totalPurchases}
-                      </span>
-                    </div>
-                    <div className={uiStyles.supplyStatCard}>
-                      <span className={uiStyles.supplyStatLabel}>
-                        {t('supplies.totalQuantity')}
-                      </span>
-                      <span className={uiStyles.supplyStatValue}>
-                        {totalQuantity}
-                      </span>
-                    </div>
-                    <div className={uiStyles.supplyStatCard}>
-                      <span className={uiStyles.supplyStatLabel}>
-                        {t('supplies.totalAmount')}
-                      </span>
-                      <span className={uiStyles.supplyStatValue}>
-                        {fmtAmount(totalAmount, currency, locale)}
-                      </span>
-                    </div>
-                    <div className={uiStyles.supplyStatCard}>
-                      <span className={uiStyles.supplyStatLabel}>
-                        {t('supplies.averagePerPurchase')}
-                      </span>
-                      <span className={uiStyles.supplyStatValue}>
-                        {fmtAmount(avgPerPurchase, currency, locale)}
-                      </span>
-                    </div>
+                    <span className={uiStyles.supplyStatValue}>
+                      {totalPurchases}
+                    </span>
+                  </div>
+                  <div className={uiStyles.supplyStatCard}>
+                    <span className={uiStyles.supplyStatLabel}>
+                      {t('supplies.totalQuantity')}
+                    </span>
+                    <span className={uiStyles.supplyStatValue}>
+                      {totalQuantity}
+                    </span>
+                  </div>
+                  <div className={uiStyles.supplyStatCard}>
+                    <span className={uiStyles.supplyStatLabel}>
+                      {t('supplies.totalAmount')}
+                    </span>
+                    <span className={uiStyles.supplyStatValue}>
+                      {fmtAmount(totalAmount, currency, locale)}
+                    </span>
+                  </div>
+                  <div className={uiStyles.supplyStatCard}>
+                    <span className={uiStyles.supplyStatLabel}>
+                      {t('supplies.averagePerPurchase')}
+                    </span>
+                    <span className={uiStyles.supplyStatValue}>
+                      {fmtAmount(avgPerPurchase, currency, locale)}
+                    </span>
                   </div>
                 </div>
-              </Card>
+              </DetailSection>
             </>
           )}
 
           {isTypeB && (
-            <Card className={uiStyles.itemSection} padded={false}>
-              <header className={uiStyles.itemSectionHead}>
-                <h3 className={uiStyles.itemSectionTitle}>
-                  <span className={uiStyles.itemSectionTitleIcon}>
-                    <IconClipboardList size={14} />
+            <DetailSection
+              icon={<IconClipboardList size={15} />}
+              title={t('supplies.meta')}
+            >
+              <div className={dc.kvList}>
+                <div className={dc.kvRow}>
+                  <span className={dc.kvLabel}>
+                    {t('supplies.minThreshold')}
                   </span>
-                  {t('supplies.meta')}
-                </h3>
-              </header>
-              <div className={uiStyles.itemSectionBody}>
-                <div className={uiStyles.itemKvList}>
-                  <div className={uiStyles.itemKvRow}>
-                    <span className={uiStyles.itemKvLabel}>
-                      {t('supplies.minThreshold')}
-                    </span>
-                    <span className={uiStyles.itemKvValue}>
-                      {it.min_stock_threshold ?? '—'}
-                    </span>
-                  </div>
-                  <div className={uiStyles.itemKvRow}>
-                    <span className={uiStyles.itemKvLabel}>
-                      {t('supplies.lifespanDays')}
-                    </span>
-                    <span className={uiStyles.itemKvValue}>
-                      {lifespan ?? '—'}
-                    </span>
-                  </div>
-                  {inUseSince != null && (
-                    <div className={uiStyles.itemKvRow}>
-                      <span className={uiStyles.itemKvLabel}>
-                        {t('itemDetail.purchasedAt')}
-                      </span>
-                      <span className={uiStyles.itemKvValue}>
-                        {formatDate(inUseSince)}
-                      </span>
-                    </div>
-                  )}
+                  <span className={dc.kvValue}>
+                    {it.min_stock_threshold ?? '—'}
+                  </span>
                 </div>
+                <div className={dc.kvRow}>
+                  <span className={dc.kvLabel}>
+                    {t('supplies.lifespanDays')}
+                  </span>
+                  <span className={dc.kvValue}>{lifespan ?? '—'}</span>
+                </div>
+                {inUseSince != null && (
+                  <div className={dc.kvRow}>
+                    <span className={dc.kvLabel}>
+                      {t('itemDetail.purchasedAt')}
+                    </span>
+                    <span className={dc.kvValue}>
+                      {formatDate(inUseSince)}
+                    </span>
+                  </div>
+                )}
               </div>
-            </Card>
+            </DetailSection>
           )}
-
-          <Card className={uiStyles.itemSection} padded={false}>
-            <header className={uiStyles.itemSectionHead}>
-              <h3 className={uiStyles.itemSectionTitle}>
-                <span className={uiStyles.itemSectionTitleIcon}>
-                  <IconMapPin size={14} />
-                </span>
-                {t('supplies.supplyLocation')}
-              </h3>
-            </header>
-            <div className={uiStyles.itemSectionBody}>
-              <div className={uiStyles.itemRailLocation}>
-                <IconMapPin size={14} />
-                <span>{locationPath ?? t('common.notSet')}</span>
-              </div>
-            </div>
-          </Card>
         </div>
       </div>
 
@@ -935,7 +861,7 @@ function RecordPurchaseDialog({
     if (priceN > 0) body.price = priceN;
     if (currency) body.currency = currency;
     if (purchasedAt) {
-      const ts = Math.floor(new Date(purchasedAt).getTime() / 1000);
+      const ts = dateOnlyToUnix(purchasedAt);
       if (!Number.isNaN(ts)) body.purchased_at = ts;
     }
     if (notes.trim()) body.notes = notes.trim();

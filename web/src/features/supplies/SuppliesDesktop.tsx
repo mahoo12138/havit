@@ -55,6 +55,7 @@ import { useNetworkStatus } from '../../utils/useNetworkStatus';
 import * as localStyles from './SuppliesDesktop.css';
 import { textStyles } from '../../styles/typography.css';
 import { themeVars } from '../../styles/theme.css';
+import { dateOnlyToUnix } from '../../utils/date';
 
 type SupplyTab = 'overview' | 'typeA' | 'typeB' | 'restock';
 type SupplyKind = 'predictive_supplies' | 'tracked_spares';
@@ -1241,7 +1242,7 @@ function RecordPurchaseDialog({
     if (priceN > 0) body.price = priceN;
     if (currency) body.currency = currency;
     if (purchasedAt) {
-      const ts = Math.floor(new Date(purchasedAt).getTime() / 1000);
+      const ts = dateOnlyToUnix(purchasedAt);
       if (!Number.isNaN(ts)) body.purchased_at = ts;
     }
     if (notes.trim()) body.notes = notes.trim();

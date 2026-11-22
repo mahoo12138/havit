@@ -388,16 +388,14 @@ export const footerBar = style({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  flexWrap: 'wrap',
   gap: themeVars.space3,
   padding: `${themeVars.space3} ${themeVars.space4}`,
   borderTop: `1px solid ${themeVars.lineSoft}`,
   color: themeVars.muted,
   fontSize: themeVars.textSizeSm,
-  '@media': {
-    '(max-width: 47.99em)': {
-      display: 'none',
-    },
-  },
+  // Visible at every width: the mobile card list renders the same paged slice,
+  // and hiding the pager used to make items past page one unreachable.
 });
 
 export const pagination = style({
@@ -418,6 +416,10 @@ export const insightsGrid = style({
 
 export const insightCard = style({
   padding: themeVars.space4,
+  // Flex column so the distribution body can fill the leftover card height
+  // (the insights grid stretches cards to equal heights).
+  display: 'flex',
+  flexDirection: 'column',
 });
 
 export const insightTitle = style({
@@ -453,10 +455,14 @@ export const miniRow = style({
 });
 
 export const distribution = style({
-  display: 'grid',
-  gridTemplateColumns: '7rem minmax(0, 1fr)',
-  gap: themeVars.space4,
+  // Hug the donut + legend as one centered group instead of pinning the
+  // legend to a stretched column — with few platforms the old grid sat
+  // heavily on the left with dead space beside it.
+  flex: 1,
+  display: 'flex',
   alignItems: 'center',
+  justifyContent: 'center',
+  gap: themeVars.space5,
   marginTop: themeVars.space3,
 });
 
@@ -464,10 +470,13 @@ export const donut = style({
   width: '7rem',
   height: '7rem',
   borderRadius: '50%',
-  background: `conic-gradient(${themeVars.info} 0% 42%, ${themeVars.accent} 42% 64%, ${themeVars.warning} 64% 82%, ${themeVars.violet} 82% 100%)`,
+  // Segment colors come from donutGradient() inline, driven by real data.
+  background: themeVars.lineSoft,
   display: 'grid',
   placeItems: 'center',
 });
+
+export const donutColors = [themeVars.info, themeVars.accent, themeVars.warning, themeVars.violet];
 
 export const donutInner = style({
   width: '4.4rem',

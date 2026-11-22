@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from '@tanstack/react-router';
 import {
@@ -41,7 +41,7 @@ import { textStyles } from '../../styles/typography.css';
 interface CreateDialogState { open: boolean; parent: Location | null }
 interface EditDialogState { open: boolean; location: Location | null }
 
-export function LocationsDesktop() {
+export function LocationsDesktop({ focusLocationId }: { focusLocationId?: string }) {
   const { t, tree, index, allItems, itemCountByLocation, subtreeItemCount, physicalRoots, virtualRoots, createMutation, editMutation, deleteMutation, qrMutation } = useLocationsData();
   const isOnline = useNetworkStatus();
 
@@ -51,6 +51,7 @@ export function LocationsDesktop() {
   const [editDialog, setEditDialog] = useState<EditDialogState>({ open: false, location: null });
   const [pendingDelete, setPendingDelete] = useState<Location | null>(null);
   const [qrViewLocation, setQrViewLocation] = useState<Location | null>(null);
+  const handledFocusRef = useRef<string | null>(null);
 
   useEffect(() => {
     function handlePrimaryAction(event: Event) {
@@ -64,11 +65,33 @@ export function LocationsDesktop() {
   }, [isOnline]);
 
   useEffect(() => {
+    // A valid ?focus= target owns the initial selection; never pick a default over it.
+    if (focusLocationId && index.byId.has(focusLocationId)) return;
     if (!selectedId && index.roots.length > 0) {
       setSelectedId(index.roots[0].id);
       setExpanded(new Set(index.roots.map((r) => r.id)));
     }
-  }, [index.roots, selectedId]);
+  }, [focusLocationId, index, selectedId]);
+
+  // ?focus=<id> (from item detail): reveal that node in the tree — expand its
+  // ancestors, select it and scroll it into view. Applied once per focus id so
+  // later tree refetches don't yank the user's manual selection back.
+  useEffect(() => {
+    if (!focusLocationId || tree.isPending || handledFocusRef.current === focusLocationId) return;
+    if (!index.byId.has(focusLocationId)) return;
+    handledFocusRef.current = focusLocationId;
+    const ancestors = new Set<string>();
+    let cur: string | undefined = index.parentMap.get(focusLocationId);
+    while (cur) {
+      ancestors.add(cur);
+      cur = index.parentMap.get(cur);
+    }
+    setExpanded((prev) => { const next = new Set(prev); for (const id of ancestors) next.add(id); return next; });
+    setSelectedId(focusLocationId);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-location-id="${CSS.escape(focusLocationId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }, [focusLocationId, tree.isPending, index]);
 
   const selected = selectedId ? index.byId.get(selectedId) ?? null : null;
   const breadcrumb = selected ? breadcrumbOf(index, selected.id) : [];
@@ -165,7 +188,7 @@ function TreeNode({ node, depth, index, expanded, selectedId, onSelect, onToggle
   }
 
   return (
-    <div>
+    <div data-location-id={node.id}>
       <TreeItem
         depth={depth}
         selected={selectedId === node.id}

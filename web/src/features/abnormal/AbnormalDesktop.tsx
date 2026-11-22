@@ -9,7 +9,6 @@ import {
   IconEye,
   IconSearch,
   IconPlus,
-  IconChevronRight,
   IconDownload,
   IconCircleCheck,
   IconShoppingCart,
@@ -53,6 +52,7 @@ import { Spinner } from '../../components/ui/spinner';
 import { NumberFieldField } from '../../components/ui/number-field-field';
 import { TextareaField } from '../../components/ui/textarea-field';
 import { useToast } from '../../components/ui/use-toast';
+import { dateOnlyToUnix } from '../../utils/date';
 import {
   abnormalApi,
   itemsApi,
@@ -272,7 +272,7 @@ export function AbnormalDesktop() {
   const addMutation = useMutation({
     mutationFn: ({ itemId, type, date, loss, notes }: typeof addForm) => {
       const body: Parameters<typeof suppliesExtendedApi.exit>[1] = { exit_type: type };
-      if (date) body.exit_date = Math.floor(new Date(date).getTime() / 1000);
+      if (date) body.exit_date = dateOnlyToUnix(date);
       if (loss) {
         body.exit_price = Number(loss);
         body.exit_currency = defaultCurrency;
@@ -750,15 +750,7 @@ export function AbnormalDesktop() {
         </InsightCard>
 
         {/* Loss valuation */}
-        <InsightCard
-          title={t('abnormal.valuationTitle')}
-          foot={
-            <button type="button" className={uiStyles.sectionLink}>
-              {t('abnormal.viewDetails')}
-              <IconChevronRight size={13} />
-            </button>
-          }
-        >
+        <InsightCard title={t('abnormal.valuationTitle')}>
           <div className={uiStyles.abnormalValuationRows}>
             <div className={uiStyles.abnormalValuationRow}>
               <span className={uiStyles.abnormalValuationLabel}>{t('abnormal.valuationTotal')}</span>

@@ -56,6 +56,7 @@ import {
   type AbnormalListItem,
 } from '../../api/client';
 import * as s from './abnormalMobile.css';
+import { dateOnlyToUnix } from '../../utils/date';
 
 const PAGE_SIZE = 10;
 
@@ -268,7 +269,7 @@ export function AbnormalMobile() {
   const addMutation = useMutation({
     mutationFn: ({ itemId, type, date, loss, notes }: typeof addForm) => {
       const body: Parameters<typeof suppliesExtendedApi.exit>[1] = { exit_type: type };
-      if (date) body.exit_date = Math.floor(new Date(date).getTime() / 1000);
+      if (date) body.exit_date = dateOnlyToUnix(date);
       if (loss) {
         body.exit_price = Number(loss);
         body.exit_currency = defaultCurrency;

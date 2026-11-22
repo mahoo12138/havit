@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { multiCurrencySum } from '../../utils/currency';
 import { authApi, itemsApi, locationsApi, remindersApi, type Location } from '../../api/client';
 
 export function countLocations(nodes: Location[] | undefined): number {
@@ -48,7 +49,8 @@ export const STATUS_VARIANT: Record<string, 'neutral' | 'info' | 'warning' | 'da
 
 export interface DashboardTotals {
   totalItems: number;
-  totalValue: number;
+  /** Formatted per-currency label (mixed currencies are never summed). */
+  totalValue: string;
   categoryCount: number;
   inStock: number;
   inUse: number;
@@ -82,13 +84,23 @@ export function useDashboardData() {
   const allItems = items.data?.items ?? [];
 
   const totals: DashboardTotals = useMemo(() => {
-    const totalValue = allItems.reduce((sum, it) => sum + (it.purchase_price ?? 0), 0);
+    // multiCurrencySum returns '' when nothing is priced yet; show the same
+    // em-dash placeholder as the locations count instead of a blank tile.
+    const totalValue = multiCurrencySum(
+      allItems.map((it) => ({ amount: it.purchase_price, currency: it.purchase_currency })),
+    );
     const categories = new Set(
       allItems.map((i) => i.category).filter((c): c is string => Boolean(c && c.trim())),
     );
     const inStock = allItems.filter((i) => i.status === 'in_stock').length;
     const inUse = allItems.filter((i) => i.status === 'in_use').length;
-    return { totalItems: allItems.length, totalValue, categoryCount: categories.size, inStock, inUse };
+    return {
+      totalItems: allItems.length,
+      totalValue: totalValue || '—',
+      categoryCount: categories.size,
+      inStock,
+      inUse,
+    };
   }, [allItems]);
 
   const categoryBreakdown = useMemo(() => {

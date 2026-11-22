@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { categoriesApi, itemsApi, locationsApi, preferencesApi, type Item, type Location } from '../../api/client';
 import { useToast } from '../../components/ui/use-toast';
+import { dateOnlyToUnix } from '../../utils/date';
 
 export interface AssetItem extends Item {
   attachments?: Array<{ url: string; type: string }>;
@@ -42,6 +43,23 @@ export function formatPrice(price?: number, currency?: string): string {
   if (currency === 'CNY' || currency === '¥') return `¥${price.toLocaleString()}`;
   if (currency === 'USD' || currency === '$') return `$${price.toLocaleString()}`;
   return `${price.toLocaleString()} ${currency ?? ''}`;
+}
+
+/**
+ * KPI aggregates for the assets ledger. Called with the *filtered* item
+ * list by both desktop and mobile so the stat cards always describe the
+ * scope the user is looking at (see the virtual-assets page precedent).
+ */
+export function computeAssetStats(items: AssetItem[]) {
+  const total = items.length;
+  const inUse = items.filter((i) => i.status === 'in_use').length;
+  const warrantyActive = items.filter((i) => getWarrantyStatus(i) === 'active').length;
+  const warrantyExpiring = items.filter((i) => {
+    const ws = getWarrantyStatus(i);
+    return ws === 'expiring' || ws === 'expired';
+  }).length;
+  const totalValue = items.reduce((sum, i) => sum + (i.purchase_price ?? 0), 0);
+  return { total, inUse, warrantyActive, warrantyExpiring, totalValue };
 }
 
 export function useAssetsData() {
@@ -106,10 +124,10 @@ export function useAssetsData() {
         location_id: form.location_id || undefined,
         serial_number: form.serial_number || undefined,
         warranty_expires_at: form.warranty_expires_at
-          ? Math.floor(new Date(form.warranty_expires_at).getTime() / 1000)
+          ? dateOnlyToUnix(form.warranty_expires_at)
           : undefined,
         purchase_date: form.purchase_date
-          ? Math.floor(new Date(form.purchase_date).getTime() / 1000)
+          ? dateOnlyToUnix(form.purchase_date)
           : undefined,
         purchase_price: form.purchase_price ? Number(form.purchase_price) : undefined,
         purchase_currency: form.purchase_price ? defaultCurrency : undefined,
@@ -150,18 +168,6 @@ export function useAssetsData() {
     [categoriesData?.categories],
   );
 
-  const stats = useMemo(() => {
-    const total = allItems.length;
-    const inUse = allItems.filter((i) => i.status === 'in_use').length;
-    const warrantyActive = allItems.filter((i) => getWarrantyStatus(i) === 'active').length;
-    const warrantyExpiring = allItems.filter((i) => {
-      const ws = getWarrantyStatus(i);
-      return ws === 'expiring' || ws === 'expired';
-    }).length;
-    const totalValue = allItems.reduce((sum, i) => sum + (i.purchase_price ?? 0), 0);
-    return { total, inUse, warrantyActive, warrantyExpiring, totalValue };
-  }, [allItems]);
-
   return {
     t,
     isLoading,
@@ -170,7 +176,6 @@ export function useAssetsData() {
     locOptions,
     categoryOptions,
     defaultCurrency,
-    stats,
     searchQuery,
     setSearchQuery,
     form,

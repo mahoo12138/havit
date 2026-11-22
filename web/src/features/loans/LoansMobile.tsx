@@ -36,6 +36,8 @@ import { useToast } from '../../components/ui/use-toast';
 import { useNetworkStatus } from '../../utils/useNetworkStatus';
 import { itemsApi, loansApi, type LoanWithItem } from '../../api/client';
 import * as s from './loansMobile.css';
+import { dateOnlyToUnix } from '../../utils/date';
+import { multiCurrencySum, type CurrencyEntry } from '../../utils/currency';
 
 type TabKey = 'active' | 'returned' | 'overdue' | 'all';
 type LoanState = 'active' | 'overdue' | 'due_soon' | 'returned';
@@ -114,53 +116,67 @@ export function LoansMobile() {
     thisMonthStart.setHours(0, 0, 0, 0);
     const monthTs = Math.floor(thisMonthStart.getTime() / 1000);
 
+    // Values are collected per currency entry: mixing currencies into one
+    // number would be meaningless, so each KPI renders a grouped label.
     const m = {
       borrowedCount: 0,
-      borrowedValue: 0,
+      borrowed: [] as CurrencyEntry[],
       overdueCount: 0,
-      overdueValue: 0,
+      overdue: [] as CurrencyEntry[],
       dueSoonCount: 0,
-      dueSoonValue: 0,
+      dueSoon: [] as CurrencyEntry[],
       thisMonthCount: 0,
-      thisMonthValue: 0,
+      thisMonth: [] as CurrencyEntry[],
       returnedCount: 0,
-      returnedValue: 0,
+      returned: [] as CurrencyEntry[],
       maxOverdueDays: 0,
     };
 
     loans.forEach((loan) => {
-      const val = loan.item_purchase_price ?? 0;
+      const entry: CurrencyEntry = { amount: loan.item_purchase_price, currency: loan.item_purchase_currency };
       if (loan.loaned_at >= monthTs) {
         m.thisMonthCount++;
-        m.thisMonthValue += val;
+        m.thisMonth.push(entry);
       }
       switch (loan.status) {
         case 'active':
           m.borrowedCount++;
-          m.borrowedValue += val;
+          m.borrowed.push(entry);
           if (loan.due_at) {
             if (loan.due_at < now) {
               m.overdueCount++;
-              m.overdueValue += val;
+              m.overdue.push(entry);
               m.maxOverdueDays = Math.max(m.maxOverdueDays, Math.ceil((now - loan.due_at) / 86400));
             } else if (loan.due_at - now <= DUE_SOON_WINDOW) {
               m.dueSoonCount++;
-              m.dueSoonValue += val;
+              m.dueSoon.push(entry);
             }
           }
           break;
         case 'unreturned':
           m.overdueCount++;
-          m.overdueValue += val;
+          m.overdue.push(entry);
           break;
         case 'returned':
           m.returnedCount++;
-          m.returnedValue += val;
+          m.returned.push(entry);
           break;
       }
     });
 
-    return m;
+    return {
+      borrowedCount: m.borrowedCount,
+      borrowedValue: multiCurrencySum(m.borrowed),
+      overdueCount: m.overdueCount,
+      overdueValue: multiCurrencySum(m.overdue),
+      dueSoonCount: m.dueSoonCount,
+      dueSoonValue: multiCurrencySum(m.dueSoon),
+      thisMonthCount: m.thisMonthCount,
+      thisMonthValue: multiCurrencySum(m.thisMonth),
+      returnedCount: m.returnedCount,
+      returnedValue: multiCurrencySum(m.returned),
+      maxOverdueDays: m.maxOverdueDays,
+    };
   }, [loans]);
 
   const visibleLoans = useMemo(() => {
@@ -218,7 +234,7 @@ export function LoansMobile() {
       loansApi.create(itemId, {
         borrower_name: borrowerName,
         borrower_contact: borrowerContact || undefined,
-        due_at: dueAt ? Math.floor(new Date(dueAt).getTime() / 1000) : undefined,
+        due_at: dateOnlyToUnix(dueAt),
       }),
     onSuccess: () => {
       invalidateLoans();

@@ -23,17 +23,18 @@ import { TextField } from '../../components/ui/text-field';
 import { useNetworkStatus } from '../../utils/useNetworkStatus';
 import { CategoryTabs } from '../../features/categories/CategoryTabs';
 import { LocationPickerField } from '../../features/locations/LocationPickerField';
-import { useAssetsData, getWarrantyStatus, formatPrice } from './useAssetsData';
+import { useAssetsData, getWarrantyStatus, formatPrice, computeAssetStats } from './useAssetsData';
 import * as s from './assetsMobile.css';
 
 type AssetTab = string;
 
-export function AssetsMobile() {
+export function AssetsMobile({ initialCategory }: { initialCategory?: string }) {
   const data = useAssetsData();
-  const { t, isLoading, allItems, locData, locOptions, categoryOptions, defaultCurrency, stats, searchQuery, setSearchQuery, form, setForm, create } = data;
+  const { t, isLoading, allItems, locData, locOptions, categoryOptions, defaultCurrency, searchQuery, setSearchQuery, form, setForm, create } = data;
   const isOnline = useNetworkStatus();
 
-  const [activeTab, setActiveTab] = useState<AssetTab>('all');
+  // Seed the category tab from the URL (detail-page breadcrumb deep links).
+  const [activeTab, setActiveTab] = useState<AssetTab>(initialCategory ?? 'all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -58,6 +59,8 @@ export function AssetsMobile() {
     if (locationFilter !== 'all') items = items.filter((i) => i.location_id === locationFilter);
     return items;
   }, [allItems, activeTab, locationFilter, statusFilter]);
+
+  const stats = useMemo(() => computeAssetStats(filteredItems), [filteredItems]);
 
   if (isLoading) return <div className={s.page}><Spinner /></div>;
 

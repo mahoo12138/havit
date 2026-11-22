@@ -6,15 +6,12 @@ import {
   IconBook,
   IconBrandApple,
   IconBrandSteam,
-  IconDots,
-  IconDownload,
   IconEye,
   IconLayoutGrid,
   IconList,
   IconPackage,
   IconPlus,
   IconSearch,
-  IconSettings,
   type TablerIcon,
 } from '@tabler/icons-react';
 import { Stack } from '../../components/ui';
@@ -53,7 +50,7 @@ import {
   TableRow,
 } from '../../components/ui/table';
 import { TextField } from '../../components/ui/text-field';
-import { itemsApi, virtualAssetsApi, type Item, type VirtualAddonPurchase, type VirtualCredential } from '../../api/client';
+import { itemsApi, virtualAssetsApi, virtualCredentialsApi, type Item } from '../../api/client';
 import { useDevice } from '../../lib/device';
 import { useNetworkStatus } from '../../utils/useNetworkStatus';
 import { CategoryTabs } from '../categories/CategoryTabs';
@@ -63,9 +60,21 @@ import * as s from './VirtualAssetsDesktop.css';
 type VaTab = string;
 type KpiTone = keyof typeof s.kpiIcon;
 
-interface VaItem extends Item {
-  credentials?: VirtualCredential[];
-  addons?: VirtualAddonPurchase[];
+// legendDot style variants keyed in the same order as s.donutColors.
+const LEGEND_DOT_KEYS = ['blue', 'teal', 'amber', 'violet'] as const;
+
+// Conic gradient for the platform-distribution donut. Percentages may not sum
+// to exactly 100 after rounding, so the final segment runs to the edge.
+// Lives here because vanilla-extract .css.ts files may only export styles.
+function donutGradient(percentages: number[]): string {
+  const stops: string[] = [];
+  let cursor = 0;
+  percentages.forEach((pct, i) => {
+    const start = cursor;
+    cursor = i === percentages.length - 1 ? 100 : Math.min(100, cursor + pct);
+    stops.push(`${s.donutColors[i % s.donutColors.length]} ${start}% ${cursor}%`);
+  });
+  return `conic-gradient(${stops.join(', ')})`;
 }
 
 function formatPrice(price?: number, currency?: string): string {
@@ -91,13 +100,14 @@ function platformTone(platform?: string): keyof typeof s.badge {
 
 const PAGE_SIZE = 20;
 
-export function VirtualAssetsDesktop() {
+export function VirtualAssetsDesktop({ initialCategory }: { initialCategory?: string }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const toast = useToast();
   const isOnline = useNetworkStatus();
   const device = useDevice();
-  const [activeTab, setActiveTab] = useState<VaTab>('all');
+  // Seed the category tab from the URL (detail-page breadcrumb deep links).
+  const [activeTab, setActiveTab] = useState<VaTab>(initialCategory ?? 'all');
   const [opened, setOpened] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -127,6 +137,11 @@ export function VirtualAssetsDesktop() {
     queryFn: () => itemsApi.list({ type: 'virtual' }),
   });
 
+  const { data: credentialData } = useQuery({
+    queryKey: ['virtual-credentials'],
+    queryFn: () => virtualCredentialsApi.list(),
+  });
+
   const create = useMutation({
     mutationFn: async () => {
       const item = await itemsApi.create({
@@ -153,7 +168,7 @@ export function VirtualAssetsDesktop() {
     },
   });
 
-  const allItems: VaItem[] = data?.items ?? [];
+  const allItems: Item[] = data?.items ?? [];
 
   const categoryOptions = useMemo(() => {
     const categories = new Set(allItems.map((item) => item.category).filter(Boolean));
@@ -181,16 +196,46 @@ export function VirtualAssetsDesktop() {
     [filteredItems, safePage],
   );
 
+  // KPIs follow the active filter set so the numbers always agree with the
+  // list right below them — global stats under a category tab read as
+  // contradictory (e.g. 资产总数 1 above an empty filtered list).
   const stats = useMemo(() => {
-    const total = allItems.length;
-    const totalValue = allItems.reduce((sum, item) => sum + (item.purchase_price ?? 0), 0);
-    const inUseCount = allItems.filter((item) => item.status === 'in_use').length;
-    const archivedCount = allItems.filter((item) => item.status === 'archived').length;
-    const pendingCount = allItems.filter((item) => item.status === 'pending' || item.status === 'inactive').length;
+    const total = filteredItems.length;
+    const totalValue = filteredItems.reduce((sum, item) => sum + (item.purchase_price ?? 0), 0);
+    const inUseCount = filteredItems.filter((item) => item.status === 'in_use').length;
+    const archivedCount = filteredItems.filter((item) => item.status === 'archived').length;
+    const pendingCount = filteredItems.filter((item) => item.status === 'pending' || item.status === 'inactive').length;
     return { total, totalValue, inUseCount, archivedCount, pendingCount };
-  }, [allItems]);
+  }, [filteredItems]);
 
   const recentItems = filteredItems.slice(0, 3);
+
+  // Real platform distribution from the caller's credentials (creating a
+  // virtual asset stores its platform as a credential). The top platforms get
+  // their own donut segment; the remainder collapses into "Other".
+  const platformDistribution = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const credential of credentialData?.credentials ?? []) {
+      const platform = credential.platform.trim();
+      if (!platform) continue;
+      counts.set(platform, (counts.get(platform) ?? 0) + 1);
+    }
+    const total = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
+    if (total === 0) return [];
+    const entries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+    const segments = entries.slice(0, 3).map(([platform, count]) => ({
+      platform,
+      share: Math.round((count / total) * 100),
+    }));
+    const restCount = entries.slice(3).reduce((sum, [, count]) => sum + count, 0);
+    if (restCount > 0) {
+      segments.push({
+        platform: t('virtualAssets.platformOther'),
+        share: Math.round((restCount / total) * 100),
+      });
+    }
+    return segments;
+  }, [credentialData, t]);
 
   return (
     <div className={s.page}>
@@ -200,7 +245,6 @@ export function VirtualAssetsDesktop() {
           <p className={s.subtitle}>{t('virtualAssets.description')}</p>
         </div>
         <div className={s.headerActions}>
-          <Button variant="outline" leftSection={<IconSettings size={14} />}>{t('virtualAssets.settings')}</Button>
           <Button leftSection={<IconPlus size={14} />} onClick={() => setOpened(true)} disabled={!isOnline}>
             {t('virtualAssets.create')}
           </Button>
@@ -255,7 +299,7 @@ export function VirtualAssetsDesktop() {
             }
             actions={
               <>
-                <ButtonGroup className={s.viewToggle} aria-label={t('virtualAssets.calendarView')}>
+                <ButtonGroup className={s.viewToggle} aria-label={t('virtualAssets.viewToggle')}>
                   <Button
                     variant="outline"
                     size="icon-sm"
@@ -270,12 +314,11 @@ export function VirtualAssetsDesktop() {
                     size="icon-sm"
                     data-active={effectiveViewMode === 'cards' || undefined}
                     onClick={() => setViewMode('cards')}
-                    aria-label={t('virtualAssets.calendarView')}
+                    aria-label={t('virtualAssets.cardsView')}
                   >
                     <IconLayoutGrid size={14} />
                   </Button>
                 </ButtonGroup>
-                <Button variant="outline" size="sm" leftSection={<IconDownload size={14} />}>{t('virtualAssets.export')}</Button>
               </>
             }
           >
@@ -297,7 +340,7 @@ export function VirtualAssetsDesktop() {
           <section className={s.insightsGrid}>
             <Card className={s.insightCard}>
               <h3 className={s.insightTitle}>{t('virtualAssets.assetOverview')}</h3>
-              <div className={s.insightSub}>{t('virtualAssets.noConversion')}</div>
+              <div className={s.insightSub}>{t('virtualAssets.assetOverviewSub')}</div>
               <div className={s.miniList}>
                 <div className={s.miniRow}>
                   <span className={s.muted}>{t('virtualAssets.assetOverviewTotal')}</span>
@@ -321,17 +364,26 @@ export function VirtualAssetsDesktop() {
 
             <Card className={s.insightCard}>
               <h3 className={s.insightTitle}>{t('virtualAssets.platformDistribution')}</h3>
-              <div className={s.distribution}>
-                <div className={s.donut}>
-                  <div className={s.donutInner}><IconPackage size={20} /></div>
+              {platformDistribution.length === 0 ? (
+                <div className={s.empty}>{t('virtualAssets.noDistribution')}</div>
+              ) : (
+                <div className={s.distribution}>
+                  <div
+                    className={s.donut}
+                    style={{ background: donutGradient(platformDistribution.map((segment) => segment.share)) }}
+                  >
+                    <div className={s.donutInner}><IconPackage size={20} /></div>
+                  </div>
+                  <div className={s.legend}>
+                    {platformDistribution.map((segment, index) => (
+                      <span className={s.legendItem} key={segment.platform}>
+                        <span className={s.legendDot[LEGEND_DOT_KEYS[index]]} />
+                        {segment.platform}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className={s.legend}>
-                  <span className={s.legendItem}><span className={s.legendDot.blue} />Steam / GOG</span>
-                  <span className={s.legendItem}><span className={s.legendDot.teal} />App Store</span>
-                  <span className={s.legendItem}><span className={s.legendDot.amber} />PlayStation</span>
-                  <span className={s.legendItem}><span className={s.legendDot.violet} />Other</span>
-                </div>
-              </div>
+              )}
             </Card>
           </section>
         </>
@@ -372,7 +424,7 @@ function KpiTile({ icon: Icon, tone, label, value, note }: {
   );
 }
 
-function VirtualAssetTable({ items, t }: { items: VaItem[]; t: (key: string, params?: any) => string }) {
+function VirtualAssetTable({ items, t }: { items: Item[]; t: (key: string, params?: any) => string }) {
   return (
     <div className={s.tableScroll}>
       <Table style={{ whiteSpace: 'nowrap' }} aria-label={t('virtualAssets.title')}>
@@ -382,7 +434,6 @@ function VirtualAssetTable({ items, t }: { items: VaItem[]; t: (key: string, par
             <TableHead>{t('virtualAssets.platformAccount')}</TableHead>
             <TableHead>{t('virtualAssets.purchaseDate')}</TableHead>
             <TableHead>{t('virtualAssets.price')}</TableHead>
-            <TableHead>{t('virtualAssets.statusTags')}</TableHead>
             <TableHead>{t('virtualAssets.action')}</TableHead>
           </TableRow>
         </TableHeader>
@@ -407,22 +458,22 @@ function VirtualAssetTable({ items, t }: { items: VaItem[]; t: (key: string, par
               <TableCell className={s.muted}>{formatDate(item.purchase_date)}</TableCell>
               <TableCell className={s.price}>{formatPrice(item.purchase_price, item.purchase_currency)}</TableCell>
               <TableCell>
-                <div className={s.badges}>
-                  <span className={s.badge.blue}>{t('virtualAssets.multiDLC')}</span>
-                  <span className={s.badge.amber}>{t('virtualAssets.steamGGOG')}</span>
-                </div>
-              </TableCell>
-              <TableCell>
                 <div className={s.actionGroup}>
-                  <Button variant="outline" size="sm" leftSection={<IconEye size={12} />}>{t('virtualAssets.viewDetails')}</Button>
-                  <Button variant="ghost" size="icon-sm" aria-label={t('virtualAssets.action')}><IconDots size={14} /></Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftSection={<IconEye size={12} />}
+                    onClick={() => window.location.assign(`/items/${item.id}`)}
+                  >
+                    {t('virtualAssets.viewDetails')}
+                  </Button>
                 </div>
               </TableCell>
             </TableRow>
           ))}
           {items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6}>
+              <TableCell colSpan={5}>
                 <div className={s.empty}>{t('virtualAssets.noItems')}</div>
               </TableCell>
             </TableRow>
@@ -464,7 +515,7 @@ function FilterSelect({ label, options, value, onChange }: {
   );
 }
 
-function VirtualAssetCards({ items, t, className }: { items: VaItem[]; t: (key: string, params?: any) => string; className: string }) {
+function VirtualAssetCards({ items, t, className }: { items: Item[]; t: (key: string, params?: any) => string; className: string }) {
   if (items.length === 0) return <div className={`${className} ${s.empty}`}>{t('virtualAssets.noItems')}</div>;
 
   return (

@@ -64,7 +64,7 @@ export function DashboardMobile() {
       {/* KPI horizontal scroll */}
         <div className={s.kpiScroll}>
           <KpiCard icon={IconPackage} label={t('kpi.totalItems')} value={totals.totalItems} loading={items.isPending} />
-          <KpiCard icon={IconCoin} label={t('kpi.totalValue')} value={formatPrice(totals.totalValue, t)} loading={items.isPending} />
+          <KpiCard icon={IconCoin} label={t('kpi.totalValue')} value={totals.totalValue} loading={items.isPending} />
           <KpiCard icon={IconCategory2} label={t('kpi.categories')} value={totals.categoryCount} loading={items.isPending} />
           <KpiCard icon={IconBox} label={t('kpi.inStock')} value={totals.inStock} loading={items.isPending} />
           <KpiCard icon={IconBuildingWarehouse} label={t('kpi.locations')} value={locationTotal ?? '—'} loading={locs.isPending} />

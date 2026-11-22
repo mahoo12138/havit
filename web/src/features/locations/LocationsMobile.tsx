@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,14 +21,23 @@ import {
 } from './useLocationsData';
 import * as s from './locationsMobile.css';
 
-export function LocationsMobile() {
+export function LocationsMobile({ focusLocationId }: { focusLocationId?: string }) {
   const data = useLocationsData();
-  const { t, index, allItems, subtreeItemCount, createMutation } = data;
+  const { t, index, allItems, subtreeItemCount, createMutation, tree } = data;
   const isOnline = useNetworkStatus();
 
   // Drill-down: current node ID (null = root level)
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const handledFocusRef = useRef<string | null>(null);
+
+  // ?focus=<id> (from item detail): drill straight down to that location.
+  useEffect(() => {
+    if (!focusLocationId || tree.isPending || handledFocusRef.current === focusLocationId) return;
+    if (!index.byId.has(focusLocationId)) return;
+    handledFocusRef.current = focusLocationId;
+    setCurrentId(focusLocationId);
+  }, [focusLocationId, tree.isPending, index]);
 
   useEffect(() => {
     function handlePrimaryAction(event: Event) {

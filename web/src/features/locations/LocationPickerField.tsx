@@ -85,6 +85,7 @@ function LocationPickerField({
   error,
   includeVirtualLocations = true,
   allowRoot = false,
+  allowClear = false,
 }: {
   label: string;
   tree?: Location[];
@@ -97,6 +98,8 @@ function LocationPickerField({
   error?: string | null;
   includeVirtualLocations?: boolean;
   allowRoot?: boolean;
+  /** Render an X affordance that clears the selection (onChange('')). */
+  allowClear?: boolean;
 }) {
   const { t } = useTranslation();
   const inputId = id ?? label;
@@ -165,7 +168,11 @@ function LocationPickerField({
           data-invalid={!!error || undefined}
           data-open={open || undefined}
         >
-          <PopoverTrigger nativeButton={false} render={<span className={s.trigger} />} disabled={disabled}>
+          <PopoverTrigger
+            nativeButton={false}
+            render={<span className={s.trigger} aria-label={t('assets.locationPickerOpen')} />}
+            disabled={disabled}
+          >
             <input
               ref={inputRef}
               id={inputId}
@@ -195,6 +202,24 @@ function LocationPickerField({
                 }}
                 onClick={(event) => {
                   event.stopPropagation();
+                  setQuery('');
+                }}
+              >
+                <IconX size={13} />
+              </button>
+            ) : allowClear && selected && !disabled ? (
+              <button
+                type="button"
+                className={s.triggerClear}
+                aria-label={t('assets.locationPickerClear')}
+                title={t('assets.locationPickerClear')}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onChange('');
                   setQuery('');
                 }}
               >

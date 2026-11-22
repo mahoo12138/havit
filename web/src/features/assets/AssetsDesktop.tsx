@@ -58,14 +58,14 @@ import { TextField } from '../../components/ui/text-field';
 import { CategoryTabs } from '../../features/categories/CategoryTabs';
 import { LocationPickerField } from '../../features/locations/LocationPickerField';
 import { useNetworkStatus } from '../../utils/useNetworkStatus';
-import { formatPrice, getWarrantyStatus, useAssetsData } from './useAssetsData';
+import { computeAssetStats, formatPrice, getWarrantyStatus, useAssetsData } from './useAssetsData';
 import * as s from './AssetsDesktop.css';
 
 type AssetTab = string;
 
 const PAGE_SIZE = 20;
 
-export function AssetsDesktop() {
+export function AssetsDesktop({ initialCategory }: { initialCategory?: string }) {
   const data = useAssetsData();
   const {
     t,
@@ -75,7 +75,6 @@ export function AssetsDesktop() {
     locOptions,
     categoryOptions,
     defaultCurrency,
-    stats,
     searchQuery,
     setSearchQuery,
     form,
@@ -87,7 +86,8 @@ export function AssetsDesktop() {
   const isOnline = useNetworkStatus();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<AssetTab>('all');
+  // Seed the category tab from the URL (detail-page breadcrumb deep links).
+  const [activeTab, setActiveTab] = useState<AssetTab>(initialCategory ?? 'all');
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
   const [opened, setOpened] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -101,6 +101,8 @@ export function AssetsDesktop() {
     if (locationFilter !== 'all') items = items.filter((item) => item.location_id === locationFilter);
     return items;
   }, [activeTab, allItems, locationFilter, statusFilter]);
+
+  const stats = useMemo(() => computeAssetStats(filteredItems), [filteredItems]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);

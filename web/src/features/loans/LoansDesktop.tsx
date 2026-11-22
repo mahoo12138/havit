@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { IconPlus, IconSettings, IconAlertTriangle, IconEye } from '@tabler/icons-react';
+import { IconPlus, IconAlertTriangle, IconEye } from '@tabler/icons-react';
 import { Stack, uiStyles } from '../../components/ui';
 import { Button, buttonVariants } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -31,6 +31,8 @@ import { TabsNav } from '../../components/ui/tabs-nav';
 import { NumberFieldField } from '../../components/ui/number-field-field';
 import { TextField } from '../../components/ui/text-field';
 import { itemsApi, loansApi, type LoanWithItem } from '../../api/client';
+import { dateOnlyToUnix } from '../../utils/date';
+import { multiCurrencySum, type CurrencyEntry } from '../../utils/currency';
 
 type TabKey = 'active' | 'returned' | 'overdue' | 'all';
 type LoanState = 'active' | 'overdue' | 'due_soon' | 'returned';
@@ -150,51 +152,64 @@ export function LoansDesktop() {
     thisMonthStart.setHours(0, 0, 0, 0);
     const monthTs = Math.floor(thisMonthStart.getTime() / 1000);
 
+    // Values are collected per currency entry: mixing currencies into one
+    // number would be meaningless, so each KPI renders a grouped label.
     const m = {
       borrowedCount: 0,
-      borrowedValue: 0,
+      borrowed: [] as CurrencyEntry[],
       overdueCount: 0,
-      overdueValue: 0,
+      overdue: [] as CurrencyEntry[],
       dueSoonCount: 0,
-      dueSoonValue: 0,
+      dueSoon: [] as CurrencyEntry[],
       thisMonthCount: 0,
-      thisMonthValue: 0,
+      thisMonth: [] as CurrencyEntry[],
       returnedCount: 0,
-      returnedValue: 0,
+      returned: [] as CurrencyEntry[],
     };
 
     loans.forEach((loan) => {
-      const val = loan.item_purchase_price ?? 0;
+      const entry: CurrencyEntry = { amount: loan.item_purchase_price, currency: loan.item_purchase_currency };
       if (loan.loaned_at >= monthTs) {
         m.thisMonthCount++;
-        m.thisMonthValue += val;
+        m.thisMonth.push(entry);
       }
       switch (loan.status) {
         case 'active':
           m.borrowedCount++;
-          m.borrowedValue += val;
+          m.borrowed.push(entry);
           if (loan.due_at) {
             if (loan.due_at < now) {
               m.overdueCount++;
-              m.overdueValue += val;
+              m.overdue.push(entry);
             } else if (loan.due_at - now <= threeDays) {
               m.dueSoonCount++;
-              m.dueSoonValue += val;
+              m.dueSoon.push(entry);
             }
           }
           break;
         case 'unreturned':
           m.overdueCount++;
-          m.overdueValue += val;
+          m.overdue.push(entry);
           break;
         case 'returned':
           m.returnedCount++;
-          m.returnedValue += val;
+          m.returned.push(entry);
           break;
       }
     });
 
-    return m;
+    return {
+      borrowedCount: m.borrowedCount,
+      borrowedValue: multiCurrencySum(m.borrowed),
+      overdueCount: m.overdueCount,
+      overdueValue: multiCurrencySum(m.overdue),
+      dueSoonCount: m.dueSoonCount,
+      dueSoonValue: multiCurrencySum(m.dueSoon),
+      thisMonthCount: m.thisMonthCount,
+      thisMonthValue: multiCurrencySum(m.thisMonth),
+      returnedCount: m.returnedCount,
+      returnedValue: multiCurrencySum(m.returned),
+    };
   }, [loans]);
 
   const createMutation = useMutation({
@@ -202,7 +217,7 @@ export function LoansDesktop() {
       loansApi.create(itemId, {
         borrower_name: borrowerName,
         borrower_contact: borrowerContact || undefined,
-        due_at: dueAt ? Math.floor(new Date(dueAt).getTime() / 1000) : undefined,
+        due_at: dateOnlyToUnix(dueAt),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
@@ -347,9 +362,6 @@ export function LoansDesktop() {
           >
             {t('loans.newLoan')}
           </Button>
-          <Button variant="quiet" leftSection={<IconSettings size={15} />}>
-            {t('loans.settings')}
-          </Button>
         </div>
       </div>
 
@@ -363,27 +375,27 @@ export function LoansDesktop() {
             <Card className={uiStyles.loanMetricCard}>
               <span className={uiStyles.loanMetricLabel}>{t('loans.metricBorrowed')}</span>
               <span className={uiStyles.loanMetricValue}>{metrics.borrowedCount}</span>
-              <span className={uiStyles.loanMetricSub}>{t('loans.totalValue')} {formatMoney(metrics.borrowedValue, t('common.currencySymbol'))}</span>
+              <span className={uiStyles.loanMetricSub}>{t('loans.totalValue')} {metrics.borrowedValue}</span>
             </Card>
             <Card className={uiStyles.loanMetricCard}>
               <span className={uiStyles.loanMetricLabel}>{t('loans.metricOverdue')}</span>
               <span className={uiStyles.loanMetricValueDanger}>{metrics.overdueCount}</span>
-              <span className={uiStyles.loanMetricSub}>{t('loans.totalValue')} {formatMoney(metrics.overdueValue, t('common.currencySymbol'))}</span>
+              <span className={uiStyles.loanMetricSub}>{t('loans.totalValue')} {metrics.overdueValue}</span>
             </Card>
             <Card className={uiStyles.loanMetricCard}>
               <span className={uiStyles.loanMetricLabel}>{t('loans.metricDueSoon')}</span>
               <span className={uiStyles.loanMetricValue}>{metrics.dueSoonCount}</span>
-              <span className={uiStyles.loanMetricSub}>{t('loans.totalValue')} {formatMoney(metrics.dueSoonValue, t('common.currencySymbol'))}</span>
+              <span className={uiStyles.loanMetricSub}>{t('loans.totalValue')} {metrics.dueSoonValue}</span>
             </Card>
             <Card className={uiStyles.loanMetricCard}>
               <span className={uiStyles.loanMetricLabel}>{t('loans.metricThisMonth')}</span>
               <span className={uiStyles.loanMetricValue}>{metrics.thisMonthCount}</span>
-              <span className={uiStyles.loanMetricSub}>{t('loans.totalValue')} {formatMoney(metrics.thisMonthValue, t('common.currencySymbol'))}</span>
+              <span className={uiStyles.loanMetricSub}>{t('loans.totalValue')} {metrics.thisMonthValue}</span>
             </Card>
             <Card className={uiStyles.loanMetricCard}>
               <span className={uiStyles.loanMetricLabel}>{t('loans.metricReturned')}</span>
               <span className={uiStyles.loanMetricValue}>{metrics.returnedCount}</span>
-              <span className={uiStyles.loanMetricSub}>{t('loans.returnedValue')} {formatMoney(metrics.returnedValue, t('common.currencySymbol'))}</span>
+              <span className={uiStyles.loanMetricSub}>{t('loans.returnedValue')} {metrics.returnedValue}</span>
             </Card>
           </div>
 

@@ -55,10 +55,10 @@ export function DashboardDesktop() {
 
         <div className={uiStyles.kpiStrip}>
           <Kpi icon={IconPackage} label={t('kpi.totalItems')} value={totals.totalItems} loading={items.isPending} />
-          <Kpi icon={IconCoin} label={t('kpi.totalValue')} value={formatPrice(totals.totalValue, t)} loading={items.isPending} />
+          <Kpi icon={IconCoin} label={t('kpi.totalValue')} value={totals.totalValue} loading={items.isPending} />
           <Kpi icon={IconCategory2} label={t('kpi.categories')} value={totals.categoryCount} loading={items.isPending} />
           <Kpi icon={IconBox} label={t('kpi.inStock')} value={totals.inStock} loading={items.isPending} />
-          <Kpi icon={IconBuildingWarehouse} label={t('kpi.locations')} value={locationTotal ?? '—'} loading={locs.isPending} />
+          <Kpi icon={IconBuildingWarehouse} label={t('kpi.locations')} value={locationTotal ?? '—'} loading={locs.isPending} className={uiStyles.kpiTileTail} />
         </div>
 
         <CategoryOverview categories={categoryBreakdown} empty={!items.isPending && categoryBreakdown.length === 0} />
@@ -92,15 +92,16 @@ function Greeting({ username }: { username: string | undefined }) {
 }
 
 function Kpi({
-  icon: Icon, label, value, loading,
+  icon: Icon, label, value, loading, className,
 }: {
   icon: Icon;
   label: string;
   value: number | string;
   loading?: boolean;
+  className?: string;
 }) {
   return (
-    <div className={uiStyles.kpiTile}>
+    <div className={[uiStyles.kpiTile, className].filter(Boolean).join(' ')}>
       <div className={uiStyles.kpiMeta}>
         <span className={uiStyles.kpiIcon}><Icon size={14} /></span>
         <span className={uiStyles.kpiLabel}>{label}</span>

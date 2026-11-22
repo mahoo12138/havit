@@ -184,14 +184,18 @@ export function EssentialsDesktop() {
     [filteredItems, safePage],
   );
 
+  // Global counts drive the header actions (return-all/pack-all must ignore
+  // the list filter); the stat cards below follow the filtered scope so the
+  // numbers always describe what is on screen.
   const carryCount = items.filter((i) => getStatusType(i) === 'carry').length;
   const bagCount = items.filter((i) => getStatusType(i) === 'bag').length;
-  const homeCount = items.filter((i) => getStatusType(i) === 'home').length;
-  const awayCount = items.filter((i) => getStatusType(i) === 'away').length;
   const withYouCount = carryCount + bagCount;
 
-  const lastConfirmedTs = items.reduce((latest, i) => Math.max(latest, i.updated_at), 0);
-  const overdueCount = items.filter((i) => Date.now() / 1000 - i.updated_at > 3 * 86400).length;
+  const scopeHome = filteredItems.filter((i) => getStatusType(i) === 'home').length;
+  const scopeAway = filteredItems.filter((i) => getStatusType(i) === 'away').length;
+  const scopeWithYou = filteredItems.filter((i) => ['carry', 'bag'].includes(getStatusType(i))).length;
+  const scopeLastConfirmed = filteredItems.reduce((latest, i) => Math.max(latest, i.updated_at), 0);
+  const scopeOverdue = filteredItems.filter((i) => Date.now() / 1000 - i.updated_at > 3 * 86400).length;
 
   const effectiveViewMode: ViewMode = device === 'mobile' ? 'cards' : viewMode;
 
@@ -241,10 +245,10 @@ export function EssentialsDesktop() {
           {activeTab === 'myEssentials' && (
             <>
           <section className={s.statsGrid} aria-label={t('essentials.title')}>
-            <StatCard icon={IconBriefcase} tone="blue" label={t('essentials.totalItems')} value={items.length} note={t('essentials.baselineSet', { count: items.length })} />
-            <StatCard icon={IconRun} tone="green" label={t('essentials.currentlyWithYou')} value={withYouCount} note={t('essentials.percentCarry', { percent: items.length > 0 ? Math.round((withYouCount / items.length) * 100) : 0 })} />
-            <StatCard icon={IconAlertTriangle} tone="orange" label={t('essentials.notOnPerson')} value={homeCount + awayCount} note={t('essentials.pleaseCheckBaseline')} />
-            <StatCard icon={IconClock} tone="gray" label={t('essentials.lastConfirmed')} value={formatRelative(t, lastConfirmedTs)} note={t('essentials.overdueConfirm', { count: overdueCount })} />
+            <StatCard icon={IconBriefcase} tone="blue" label={t('essentials.totalItems')} value={filteredItems.length} note={t('essentials.baselineSet', { count: filteredItems.length })} />
+            <StatCard icon={IconRun} tone="green" label={t('essentials.currentlyWithYou')} value={scopeWithYou} note={t('essentials.percentCarry', { percent: filteredItems.length > 0 ? Math.round((scopeWithYou / filteredItems.length) * 100) : 0 })} />
+            <StatCard icon={IconAlertTriangle} tone="orange" label={t('essentials.notOnPerson')} value={scopeHome + scopeAway} note={t('essentials.pleaseCheckBaseline')} />
+            <StatCard icon={IconClock} tone="gray" label={t('essentials.lastConfirmed')} value={formatRelative(t, scopeLastConfirmed)} note={t('essentials.overdueConfirm', { count: scopeOverdue })} />
           </section>
 
           <TableCard
