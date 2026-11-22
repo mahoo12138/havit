@@ -248,6 +248,7 @@ export interface Item {
   purchase_price?: number;
   purchase_currency?: string;
   purchase_date?: number;
+  purchase_platform?: string;
   serial_number?: string;
   warranty_expires_at?: number;
   warranty_contact?: string;
@@ -261,6 +262,34 @@ export interface Item {
   created_at: number;
   updated_at: number;
   tags?: Tag[];
+}
+
+// Patch payload for items: omitted keys leave stored values untouched.
+// Nullable-capable fields also accept an explicit null, which clears the
+// stored value (the backend distinguishes null from an omitted key). Only
+// name/type/status/is_private/metadata lack clear semantics.
+export interface ItemUpdateInput {
+  name?: string;
+  description?: string | null;
+  category?: string | null;
+  type?: string;
+  status?: string;
+  location_id?: string | null;
+  home_base_location_id?: string | null;
+  current_status_tag?: string | null;
+  purchase_price?: number | null;
+  purchase_currency?: string | null;
+  purchase_date?: number | null;
+  purchase_platform?: string | null;
+  serial_number?: string | null;
+  warranty_expires_at?: number | null;
+  warranty_contact?: string | null;
+  current_stock?: number | null;
+  min_stock_threshold?: number | null;
+  lifespan_days?: number | null;
+  in_use_since?: number | null;
+  is_private?: boolean;
+  metadata?: Record<string, string>;
 }
 
 export interface Tag {
@@ -281,10 +310,12 @@ export interface Category {
   usage_count: number;
 }
 
+export type AttachmentType = 'photo' | 'purchase_proof';
+
 export interface Attachment {
   id: string;
   item_id: string;
-  type: 'photo' | string;
+  type: AttachmentType | string;
   filename: string;
   path: string;
   size: number;
@@ -318,13 +349,21 @@ export const itemsApi = {
     api.get('items/', { searchParams: params as Record<string, string> }).json<{ items: Item[] }>(),
   get: (id: string) => api.get(`items/${id}`).json<Item>(),
   create: (body: Partial<Item>) => api.post('items/', { json: body }).json<Item>(),
-  update: (id: string, body: Partial<Item>) =>
+  update: (id: string, body: ItemUpdateInput) =>
     api.patch(`items/${id}`, { json: body }).json<Item>(),
   archive: (id: string) => api.delete(`items/${id}`),
   replaceTags: (id: string, tagIds: string[]) =>
     api.put(`items/${id}/tags`, { json: { tag_ids: tagIds } }).json<Item>(),
   attachments: (id: string) =>
     api.get(`items/${id}/attachments`).json<{ attachments: Attachment[] }>(),
+  uploadAttachment: (id: string, file: File, type: AttachmentType) => {
+    const body = new FormData();
+    body.append('file', file);
+    body.append('type', type);
+    return api.post(`items/${id}/attachments`, { body }).json<Attachment>();
+  },
+  deleteAttachment: (attachmentId: string) =>
+    api.delete(`attachments/${attachmentId}`),
   uploadPhoto: (id: string, file: File) => {
     const body = new FormData();
     body.append('file', file);
@@ -626,10 +665,8 @@ export const remindersApi = {
 };
 
 export const notifyApi = {
-  processDue: (now?: number) => {
-    const body = now !== undefined ? { now } : {};
-    return api.post('notify/process-due', { json: body }).json<NotifyProcessResult>();
-  },
+  // Owner-only manual trigger; the server always uses its own clock.
+  processDue: () => api.post('notify/process-due', { json: {} }).json<NotifyProcessResult>(),
 };
 
 export const backupApi = {
