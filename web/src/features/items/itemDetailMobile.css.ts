@@ -228,72 +228,6 @@ export const qrChip = style({
   fontSize: themeVars.textSizeXs,
 });
 
-export const actionList = style({
-  display: 'grid',
-  gridTemplateColumns: '1fr',
-  gap: themeVars.space2,
-  border: 0,
-  borderRadius: themeVars.radius3,
-  background: 'transparent',
-  padding: 0,
-  '@media': {
-    '(min-width: 26em)': {
-      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    },
-  },
-});
-
-export const actionRow = style({
-  display: 'grid',
-  gridTemplateColumns: '1.6rem minmax(0, 1fr) auto auto',
-  alignItems: 'center',
-  gap: themeVars.space2,
-  minHeight: '3rem',
-  border: `1px solid ${themeVars.lineSoft}`,
-  borderRadius: themeVars.radius2,
-  background: themeVars.panel,
-  color: themeVars.text,
-  padding: `0 ${themeVars.space3}`,
-  textAlign: 'left',
-  font: 'inherit',
-  minWidth: 0,
-  cursor: 'pointer',
-  boxShadow: themeVars.shadowSoft,
-  selectors: {
-    '&:hover, &:active': {
-      background: themeVars.lineSoft,
-    },
-  },
-});
-
-export const actionIcon = style({
-  display: 'inline-grid',
-  placeItems: 'center',
-  color: themeVars.muted,
-});
-
-export const actionLabel = style({
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeBase,
-  fontWeight: themeVars.weightSemibold,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-});
-
-export const actionValue = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-  maxWidth: '8rem',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-});
-
-export const chevron = style({
-  color: themeVars.muted,
-});
-
 // Applied as a className on the Card component; head/body carry the padding.
 export const section = style({
   selectors: {
@@ -361,6 +295,20 @@ export const compactSub = style({
   fontSize: themeVars.textSizeXs,
 });
 
+export const compactHead = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: themeVars.space2,
+});
+
+export const compactActions = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.25rem',
+  flex: '0 0 auto',
+});
+
 export const timelineRow = style({
   display: 'flex',
   flexDirection: 'column',
@@ -408,4 +356,63 @@ export const bottomBar = style({
   borderTop: `1px solid ${themeVars.line}`,
   background: themeVars.panel,
   boxShadow: '0 -6px 18px rgba(17, 24, 39, 0.08)',
+});
+
+export const tagAddButton = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '1.75rem',
+  height: '1.75rem',
+  borderRadius: themeVars.radius2,
+  color: themeVars.muted,
+  border: `1px dashed ${themeVars.line}`,
+  background: 'transparent',
+  cursor: 'pointer',
+});
+
+export const dialogStack = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: themeVars.space3,
+});
+
+export const tagList = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: themeVars.space2,
+  alignItems: 'center',
+});
+
+export const tagRemove = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  marginLeft: '0.2rem',
+  color: themeVars.muted,
+  background: 'transparent',
+  border: 0,
+  cursor: 'pointer',
+  padding: 0,
+});
+
+export const inlineForm = style({
+  display: 'flex',
+  gap: themeVars.space2,
+  alignItems: 'flex-end',
+});
+
+export const metadataValueButton = style({
+  textAlign: 'left',
+  padding: 0,
+  background: 'none',
+  border: 0,
+  cursor: 'pointer',
+  color: themeVars.muted,
+  fontSize: themeVars.textSizeXs,
+});
+
+export const dialogActions = style({
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: themeVars.space2,
 });

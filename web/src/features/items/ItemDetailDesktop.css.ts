@@ -1,6 +1,13 @@
-import { globalStyle, style } from '@vanilla-extract/css';
+import { globalStyle, style, styleVariants } from '@vanilla-extract/css';
 import { themeVars } from '../../styles/theme.css';
 import { textStyles } from '../../styles/typography.css';
+
+/*
+ * Item detail page chrome (top bar, hero card, gallery, spec grid, location
+ * route card, warranty documents, dialogs). The small content cards are
+ * composed from the shared primitives in `styles/detail.css.ts` inside the
+ * `DetailSection` shell.
+ */
 
 export const page = style({
   display: 'flex',
@@ -278,11 +285,6 @@ export const tagRemove = style({
   padding: 0,
 });
 
-export const mutedText = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-});
-
 export const specGrid = style({
   display: 'grid',
   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -431,9 +433,11 @@ export const blockLink = style({
   },
 });
 
+// Main column (wide content) and rail column (compact meta): both stack
+// cards in a single column so the reading order matches the visual order.
 export const contentGrid = style({
   display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1.15fr) minmax(20rem, 0.85fr)',
+  gridTemplateColumns: 'minmax(0, 1fr) 20rem',
   gap: themeVars.space4,
   alignItems: 'start',
   '@media': {
@@ -443,330 +447,38 @@ export const contentGrid = style({
   },
 });
 
-export const leftColumn = style({
-  display: 'grid',
-  gridTemplateColumns: 'minmax(0, 0.85fr) minmax(0, 1.15fr)',
+export const mainColumn = style({
+  display: 'flex',
+  flexDirection: 'column',
   gap: themeVars.space4,
-  alignItems: 'start',
-  '@media': {
-    '(max-width: 64em)': {
-      gridTemplateColumns: '1fr',
-    },
-  },
-});
-
-export const rightColumn = style({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: themeVars.space4,
-  alignItems: 'start',
-  '@media': {
-    '(max-width: 52em)': {
-      gridTemplateColumns: '1fr',
-    },
-  },
-});
-
-// Applied as a className on the Card component; head/body carry the padding.
-export const sectionCard = style({
-  selectors: {
-    '&[data-slot="card"]': {
-      padding: 0,
-      gap: 0,
-      minWidth: 0,
-    },
-  },
-});
-
-export const sectionHead = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: themeVars.space3,
-  minHeight: '3.2rem',
-  padding: `${themeVars.space3} ${themeVars.space4}`,
-  borderBottom: `1px solid ${themeVars.lineSoft}`,
-});
-
-export const sectionTitle = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: themeVars.space2,
-  margin: 0,
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeMd,
-  fontWeight: themeVars.weightSemibold,
-});
-
-export const sectionIcon = style({
-  display: 'inline-grid',
-  placeItems: 'center',
-  width: '1.65rem',
-  height: '1.65rem',
-  borderRadius: themeVars.radius1,
-  background: themeVars.bgSoft,
-  color: themeVars.info,
-});
-
-export const sectionBody = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space3,
-  padding: themeVars.space4,
-});
-
-export const documentStrip = style({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-  gap: themeVars.space3,
-});
-
-export const documentThumb = style({
-  minHeight: '4.2rem',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: themeVars.space1,
-  textAlign: 'center',
-  padding: `${themeVars.space2} ${themeVars.space3}`,
-  borderRadius: themeVars.radius2,
-  background: themeVars.bgSoft,
-  border: `1px solid ${themeVars.lineSoft}`,
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-  cursor: 'default',
-  selectors: {
-    '&[data-card]': {
-      background: themeVars.dangerSoft,
-      color: themeVars.danger,
-    },
-    '&:is(button)': {
-      cursor: 'pointer',
-    },
-  },
-});
-
-export const documentThumbTitle = style({
-  fontWeight: themeVars.weightSemibold,
-  fontSize: themeVars.textSizeSm,
-  color: 'inherit',
-});
-
-export const documentThumbSub = style({
-  fontSize: themeVars.textSizeXs,
-  color: themeVars.muted,
-  wordBreak: 'break-all',
-});
-
-export const documentAdd = style({
-  minHeight: '4.2rem',
-  display: 'inline-flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: themeVars.space1,
-  borderRadius: themeVars.radius2,
-  border: `1px dashed ${themeVars.line}`,
-  background: themeVars.panel,
-  color: themeVars.info,
-  fontSize: themeVars.textSizeSm,
-  cursor: 'pointer',
-});
-
-export const kvList = style({
-  display: 'flex',
-  flexDirection: 'column',
-});
-
-export const kvRow = style({
-  display: 'grid',
-  gridTemplateColumns: 'minmax(6rem, 0.72fr) minmax(0, 1fr) auto',
-  gap: themeVars.space3,
-  alignItems: 'center',
-  minHeight: '2rem',
-  borderTop: `1px solid ${themeVars.lineSoft}`,
-  selectors: {
-    '&:first-child': {
-      borderTop: 0,
-    },
-  },
-});
-
-export const kvLabel = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-});
-
-export const kvValue = style({
-  color: themeVars.text,
-  fontSize: themeVars.textSizeSm,
-  fontWeight: themeVars.weightSemibold,
-  textAlign: 'right',
-  overflowWrap: 'anywhere',
-});
-
-export const kvValueButton = style({
-  border: 0,
-  background: 'transparent',
-  color: themeVars.text,
-  font: 'inherit',
-  fontSize: themeVars.textSizeSm,
-  fontWeight: themeVars.weightSemibold,
-  textAlign: 'right',
-  cursor: 'pointer',
-});
-
-export const iconOnly = style({
-  display: 'inline-grid',
-  placeItems: 'center',
-  width: '1.75rem',
-  height: '1.75rem',
-  border: 0,
-  borderRadius: themeVars.radius1,
-  background: 'transparent',
-  color: themeVars.muted,
-  cursor: 'pointer',
-});
-
-export const taskEmpty = style({
-  padding: themeVars.space2 + ' 0',
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-});
-
-export const taskList = style({
-  display: 'flex',
-  flexDirection: 'column',
-});
-
-export const taskRow = style({
-  display: 'grid',
-  gridTemplateColumns: '1.75rem minmax(0, 1fr) auto',
-  gap: themeVars.space2,
-  alignItems: 'center',
-  padding: `${themeVars.space2} 0`,
-  borderTop: `1px solid ${themeVars.lineSoft}`,
-  selectors: {
-    '&:first-child': {
-      borderTop: 0,
-    },
-  },
-});
-
-export const taskIcon = style({
-  display: 'inline-grid',
-  placeItems: 'center',
-  width: '1.55rem',
-  height: '1.55rem',
-  borderRadius: themeVars.radius1,
-  background: themeVars.infoSoft,
-  color: themeVars.info,
-  selectors: {
-    '&[data-tone="danger"]': {
-      background: themeVars.dangerSoft,
-      color: themeVars.danger,
-    },
-    '&[data-tone="warning"]': {
-      background: themeVars.warningSoft,
-      color: themeVars.warningText,
-    },
-    '&[data-tone="success"]': {
-      background: themeVars.successSoft,
-      color: themeVars.success,
-    },
-  },
-});
-
-export const taskMeta = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.1rem',
-});
-
-export const taskTitle = style({
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeSm,
-  fontWeight: themeVars.weightSemibold,
-});
-
-export const taskSub = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeXs,
-});
-
-export const taskState = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-});
-
-export const blockLinkButton = style({
-  display: 'inline-flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  minHeight: '2.2rem',
-  border: `1px solid ${themeVars.line}`,
-  borderRadius: themeVars.radius1,
-  background: themeVars.panel,
-  color: themeVars.info,
-  fontSize: themeVars.textSizeSm,
-  fontWeight: themeVars.weightSemibold,
-  cursor: 'pointer',
-});
-
-export const relatedList = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space2,
-});
-
-export const relatedRow = style({
-  display: 'grid',
-  gridTemplateColumns: '2.3rem minmax(0, 1fr) auto',
-  gap: themeVars.space3,
-  alignItems: 'center',
-  color: themeVars.text,
-  textDecoration: 'none',
-});
-
-export const relatedThumb = style({
-  display: 'inline-grid',
-  placeItems: 'center',
-  width: '2.3rem',
-  height: '2.3rem',
-  borderRadius: themeVars.radius1,
-  background: themeVars.bgSoft,
-  color: themeVars.muted,
-});
-
-export const relatedMeta = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.1rem',
   minWidth: 0,
 });
 
-export const relatedName = style({
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeSm,
-  fontWeight: themeVars.weightSemibold,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
+export const railColumn = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: themeVars.space4,
+  minWidth: 0,
 });
 
-export const relatedSub = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeXs,
+// Warranty summary text tone, keyed by getWarrantyView tones (neutral→info).
+export const warrantySummary = styleVariants({
+  success: { color: themeVars.success },
+  warning: { color: themeVars.warning },
+  danger: { color: themeVars.danger },
+  info: { color: themeVars.muted },
 });
 
-export const emptyState = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-  padding: themeVars.space3,
-  textAlign: 'center',
-  background: themeVars.bgSoft,
-  borderRadius: themeVars.radius2,
+export const rowActions = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.25rem',
+});
+
+// Stack wrapper for external ReminderRow rows, which carry their own borders.
+export const taskList = style({
+  display: 'flex',
+  flexDirection: 'column',
 });
 
 export const stockHero = style({
@@ -785,92 +497,6 @@ export const warningText = style({
   color: themeVars.warningText,
   fontSize: themeVars.textSizeXs,
   fontWeight: themeVars.weightSemibold,
-});
-
-export const compactCard = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.15rem',
-  padding: themeVars.space3,
-  borderRadius: themeVars.radius2,
-  background: themeVars.bgSoft,
-});
-
-export const compactTitle = style({
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeBase,
-  fontWeight: themeVars.weightSemibold,
-});
-
-export const compactSub = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeXs,
-});
-
-export const loanRow = style({
-  display: 'grid',
-  gridTemplateColumns: '2rem minmax(0, 1fr) auto',
-  gap: themeVars.space3,
-  alignItems: 'center',
-});
-
-export const avatar = style({
-  display: 'inline-grid',
-  placeItems: 'center',
-  width: '2rem',
-  height: '2rem',
-  borderRadius: '999px',
-  background: themeVars.accentSoft,
-  color: themeVars.accentInk,
-  fontSize: themeVars.textSizeSm,
-  fontWeight: themeVars.weightBold,
-});
-
-export const loanMeta = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.1rem',
-});
-
-export const timeline = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space3,
-});
-
-export const timelineRow = style({
-  display: 'grid',
-  gridTemplateColumns: '2rem minmax(0, 1fr)',
-  gap: themeVars.space3,
-  alignItems: 'start',
-});
-
-export const timelineIcon = style({
-  display: 'inline-grid',
-  placeItems: 'center',
-  width: '1.9rem',
-  height: '1.9rem',
-  borderRadius: '999px',
-  background: themeVars.bgSoft,
-  color: themeVars.muted,
-});
-
-export const timelineMeta = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.15rem',
-});
-
-export const payload = style({
-  display: 'block',
-  marginTop: themeVars.space1,
-  padding: themeVars.space2,
-  borderRadius: themeVars.radius1,
-  background: themeVars.bgSoft,
-  color: themeVars.muted,
-  fontFamily: themeVars.fontMono,
-  fontSize: themeVars.textSizeXs,
-  whiteSpace: 'pre-wrap',
 });
 
 export const dialogStack = style({

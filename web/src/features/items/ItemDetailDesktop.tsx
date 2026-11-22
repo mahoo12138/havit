@@ -9,7 +9,6 @@ import {
   IconClipboardList,
   IconClock,
   IconCopy,
-  IconDots,
   IconDownload,
   IconFileExport,
   IconHistory,
@@ -17,6 +16,7 @@ import {
   IconKey,
   IconMapPin,
   IconPackage,
+  IconPencil,
   IconPhotoPlus,
   IconPlus,
   IconQrcode,
@@ -29,10 +29,9 @@ import {
 } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '../../components/ui/badge';
-import { uiStyles } from '../../components/ui';
 import { Button } from '../../components/ui/button';
-import { Card } from '../../components/ui/card';
 import { Dialog } from '../../components/ui/dialog-compat';
+import { DetailSection } from '../../components/ui/detail-section';
 import { SelectField } from '../../components/ui/select-field';
 import { Spinner } from '../../components/ui/spinner';
 import { StatusBadge } from '../../components/ui/status-badge';
@@ -44,20 +43,24 @@ import {
   loansApi,
   suppliesExtendedApi,
   virtualAssetsApi,
-  virtualCredentialsApi,
   remindersApi,
   type Attachment,
   type Item,
+  type VirtualCredential,
 } from '../../api/client';
 import { useNetworkStatus } from '../../utils/useNetworkStatus';
-import { formatDate, formatDateTime, formatPrice, useItemDetailData } from './useItemDetailData';
+import { formatDate, formatDateTime, formatPrice, getWarrantyView, useItemDetailData } from './useItemDetailData';
 import { CredentialFormDialog } from '../credentials/CredentialFormDialog';
+import { LicenseKeyBox } from '../credentials/LicenseKeyBox';
+import { useCredentialDelete } from '../credentials/useCredentialDelete';
 import { WarrantyEditDialog } from '../credentials/WarrantyTab';
 import { ReminderRow } from '../reminders/reminderUi';
+import { ChangeLocationDialog, ItemEditDialog } from './ItemEditDialog';
+import { ProofStrip } from './ProofStrip';
 import * as s from './ItemDetailDesktop.css';
+import * as d from '../../styles/detail.css';
 
 export function ItemDetailDesktop({ itemId }: { itemId: string }) {
-  const d = useItemDetailData(itemId);
   const {
     t,
     item,
@@ -67,6 +70,10 @@ export function ItemDetailDesktop({ itemId }: { itemId: string }) {
     photoIdx,
     currentPhoto,
     setSelectedPhotoIdx,
+    proofs,
+    uploadProof,
+    deleteProof,
+    handleProofPick,
     currentTags,
     tagOptions,
     statusOptions,
@@ -80,11 +87,14 @@ export function ItemDetailDesktop({ itemId }: { itemId: string }) {
     uploadPhoto,
     replaceTags,
     createTag,
-  } = d;
+  } = useItemDetailData(itemId);
   const isOnline = useNetworkStatus();
   const [tagName, setTagName] = useState('');
   const [selectedTagID, setSelectedTagID] = useState('');
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
   if (item.isLoading) return <Spinner />;
   if (item.error || !item.data) return <p className={s.errorText}>{t('errors.not_found')}</p>;
@@ -93,7 +103,26 @@ export function ItemDetailDesktop({ itemId }: { itemId: string }) {
   const typeLabel = t(`items.${it.type}`, it.type);
   const isConsumable = it.type === 'predictive_supplies' || it.type === 'tracked_spares';
   const isVirtual = it.type === 'virtual';
-  const warranty = getWarrantyView(it, t);
+  // The breadcrumb entry must match the ledger the item lives in — each
+  // item type rolls up to exactly one ledger page, which is why there is
+  // no separate type level: it would either repeat the ledger link or be
+  // a dead crumb. The type still shows as the badge under the title.
+  const ledgerTo =
+    isVirtual ? '/virtual-assets'
+      : isConsumable ? '/supplies'
+        : it.type === 'essentials' ? '/essentials'
+          : '/assets';
+  const ledgerLabel =
+    isVirtual ? t('virtualAssets.title')
+      : isConsumable ? t('supplies.title')
+        : it.type === 'essentials' ? t('essentials.title')
+          : t('assets.title');
+  // Category tabs with URL preselect exist only on /assets and
+  // /virtual-assets; elsewhere the category crumb stays plain text.
+  const categoryCrumb =
+    it.category && (isVirtual || it.type === 'durable')
+      ? { to: ledgerTo, search: { category: it.category } }
+      : undefined;
 
   function copyCurrentUrl() {
     void navigator.clipboard?.writeText(window.location.href);
@@ -103,13 +132,15 @@ export function ItemDetailDesktop({ itemId }: { itemId: string }) {
     <div className={s.page}>
       <header className={s.topBar}>
         <nav className={s.breadcrumb} aria-label={String(t('common.breadcrumb'))}>
-          <Link to="/assets">{t('assets.title')}</Link>
-          <IconChevronRight size={13} />
-          <span>{typeLabel}</span>
+          <Link to={ledgerTo}>{ledgerLabel}</Link>
           {it.category && (
             <>
               <IconChevronRight size={13} />
-              <span>{it.category}</span>
+              {categoryCrumb ? (
+                <Link to={categoryCrumb.to} search={categoryCrumb.search}>{it.category}</Link>
+              ) : (
+                <span>{it.category}</span>
+              )}
             </>
           )}
           <IconChevronRight size={13} />
@@ -198,14 +229,32 @@ export function ItemDetailDesktop({ itemId }: { itemId: string }) {
                 </button>
               </div>
             </div>
-            <Button variant="ghost" size="icon-sm" aria-label={t('itemDetail.more')}>
-              <IconDots size={16} />
-            </Button>
+            <div className={s.rowActions}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('items.editTitle')}
+                title={t('items.editTitle')}
+                onClick={() => setEditOpen(true)}
+              >
+                <IconPencil size={16} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('items.archiveTitle')}
+                title={t('items.archiveTitle')}
+                disabled={!isOnline || archive.isPending}
+                onClick={() => setArchiveConfirmOpen(true)}
+              >
+                <IconArchive size={16} />
+              </Button>
+            </div>
           </div>
 
           <div className={s.tagRow}>
             {currentTags.length === 0 ? (
-              <span className={s.mutedText}>{t('items.noTags')}</span>
+              <span className={d.mutedText}>{t('items.noTags')}</span>
             ) : (
               currentTags.map((tag: any) => (
                 <Tag key={tag.id}>#{tag.name}</Tag>
@@ -214,42 +263,46 @@ export function ItemDetailDesktop({ itemId }: { itemId: string }) {
           </div>
 
           <div className={s.specGrid}>
-            <SpecCell label={t('items.status')}>
-              <StatusBadge status={it.status} />
-            </SpecCell>
-            <SpecCell label={t('itemDetail.currentLocation')}>{locationPath ?? t('common.notSet')}</SpecCell>
             <SpecCell label={t('items.serialNumber')}>{it.serial_number ?? t('common.notSet')}</SpecCell>
             <SpecCell label={t('items.purchasePrice')}>{formatPrice(it.purchase_price, it.purchase_currency, t)}</SpecCell>
             <SpecCell label={t('itemDetail.purchasedAt')}>{formatDate(it.purchase_date) ?? t('common.notSet')}</SpecCell>
             <SpecCell label={t('itemDetail.baseLocation')}>{it.home_base_location_id ? t('common.set') : t('common.notSet')}</SpecCell>
             <SpecCell label={t('itemDetail.qrCode')}>
-      <InlineCode text={it.id.slice(0, 8).toUpperCase()} />
-            </SpecCell>
-            <SpecCell label={t('itemDetail.lastUpdated')}>{formatDateTime(it.updated_at)}</SpecCell>
-            <SpecCell label={t('itemDetail.warrantyExpiry')} span>
-              {warranty.expiresAt ? `${formatDate(warranty.expiresAt)} (${warranty.summary})` : t('itemDetail.noWarranty')}
+              <InlineCode text={it.id.slice(0, 8).toUpperCase()} />
             </SpecCell>
           </div>
         </div>
 
-        <LocationRouteCard locationPath={locationPath} />
+        <LocationRouteCard
+          locationId={it.location_id}
+          locationPath={locationPath}
+          onMove={() => setMoveOpen(true)}
+        />
       </section>
 
       <main className={s.contentGrid}>
-        <div className={s.leftColumn}>
+        <div className={s.mainColumn}>
           <WarrantyPanel item={it} />
+          <PurchasePanel
+            item={it}
+            isVirtual={isVirtual}
+            proofs={proofs}
+            uploadPending={uploadProof.isPending}
+            onPickProof={handleProofPick}
+            onDeleteProof={(proof) => deleteProof.mutate(proof.id)}
+            onEdit={() => setEditOpen(true)}
+          />
+          {isVirtual && <PlatformSection itemId={itemId} itemName={it.name} />}
+          <LoansSection itemId={itemId} />
           <EventsSection itemId={itemId} />
+          <ContainerSection itemId={itemId} />
         </div>
 
-        <div className={s.rightColumn}>
-          <LoansSection itemId={itemId} />
+        <div className={s.railColumn}>
+          <StatusPanel statusOptions={statusOptions} status={it.status} isOnline={isOnline} pending={updateStatus.isPending} onChange={(status) => updateStatus.mutate(status)} locationPath={locationPath} />
           <TasksPanel itemId={it.id} />
           {isConsumable && <ConsumableSection itemId={itemId} item={it} />}
-          {isVirtual && <VirtualSection itemId={itemId} />}
-          <RelatedPanel itemId={itemId} />
           <MetadataSection itemId={itemId} item={it} />
-          <ContentsSection itemId={itemId} />
-          <StatusPanel statusOptions={statusOptions} status={it.status} isOnline={isOnline} pending={updateStatus.isPending} onChange={(status) => updateStatus.mutate(status)} locationPath={locationPath} />
           <TimelineMeta item={it} />
         </div>
       </main>
@@ -271,7 +324,7 @@ export function ItemDetailDesktop({ itemId }: { itemId: string }) {
                 </button>
               </Tag>
             ))}
-            {currentTags.length === 0 && <span className={s.mutedText}>{t('items.noTags')}</span>}
+            {currentTags.length === 0 && <span className={d.mutedText}>{t('items.noTags')}</span>}
           </div>
           {tagOptions.length > 0 && (
             <SelectField
@@ -308,6 +361,30 @@ export function ItemDetailDesktop({ itemId }: { itemId: string }) {
           <div className={s.dialogActions}>
             <Button variant="quiet" onClick={() => setTagDialogOpen(false)}>{t('common.close')}</Button>
           </div>
+        </div>
+      </Dialog>
+
+      {editOpen && <ItemEditDialog item={it} onClose={() => setEditOpen(false)} />}
+      {moveOpen && <ChangeLocationDialog item={it} onClose={() => setMoveOpen(false)} />}
+      <Dialog
+        open={archiveConfirmOpen}
+        title={t('items.archiveTitle')}
+        onClose={() => setArchiveConfirmOpen(false)}
+      >
+        <p className={d.emptyState}>{t('items.archiveConfirmBody')}</p>
+        <div className={s.dialogActions}>
+          <Button variant="quiet" onClick={() => setArchiveConfirmOpen(false)}>{t('common.cancel')}</Button>
+          <Button
+            variant="destructive"
+            disabled={!isOnline || archive.isPending}
+            onClick={() =>
+              archive.mutate(undefined, {
+                onSuccess: () => setArchiveConfirmOpen(false),
+              })
+            }
+          >
+            {archive.isPending ? t('common.loading') : t('items.archiveTitle')}
+          </Button>
         </div>
       </Dialog>
     </div>
@@ -370,13 +447,14 @@ function HeroPhoto({ itemName, photo }: { itemName: string; photo: Attachment })
   return <img className={s.mainPhotoImg} src={photo.url} alt={`${itemName} photo`} onError={() => setFailed(true)} />;
 }
 
-function LocationRouteCard({ locationPath }: { locationPath?: string }) {
+function LocationRouteCard({ locationId, locationPath, onMove }: { locationId?: string; locationPath?: string; onMove: () => void }) {
   const { t } = useTranslation();
   const nodes = splitPath(locationPath);
   return (
     <aside className={s.locationCard}>
       <div className={s.cardTitleRow}>
         <h2 className={s.cardTitle}>{t('itemDetail.locationPath')}</h2>
+        <Button variant="ghost" size="sm" onClick={onMove}>{t('itemDetail.moveLocation')}</Button>
       </div>
       <div className={s.routeList}>
         {(nodes.length > 0 ? nodes : [t('common.notSet')]).map((node, index) => {
@@ -390,7 +468,7 @@ function LocationRouteCard({ locationPath }: { locationPath?: string }) {
           );
         })}
       </div>
-      <Link to="/locations" className={s.blockLink}>
+      <Link to="/locations" search={locationId ? { focus: locationId } : {}} className={s.blockLink}>
         {t('itemDetail.viewItemsAtLocation')}
         <IconChevronRight size={14} />
       </Link>
@@ -402,45 +480,24 @@ function WarrantyPanel({ item }: { item: Item }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [credentialOpen, setCredentialOpen] = useState(false);
-  const creds = useQuery({ queryKey: ['item', item.id, 'credentials'], queryFn: () => virtualAssetsApi.listCredentials(item.id) });
-  const credentialCount = creds.data?.credentials.length ?? 0;
   const warranty = getWarrantyView(item, t);
-  const purchaseSummary = item.purchase_date
-    ? `${formatDate(item.purchase_date)}${item.purchase_price != null ? ` · ${formatPrice(item.purchase_price, item.purchase_currency, t)}` : ''}`
-    : t('common.notSet');
   return (
-    <SectionCard
+    <DetailSection
       icon={<IconShieldCheck size={15} />}
       title={t('itemDetail.warranty')}
       action={<Button variant="ghost" size="sm" onClick={() => setEditing(true)}>{t('common.edit')}</Button>}
     >
-      <div className={s.documentStrip}>
-        <div className={s.documentThumb}>
-          <IconReceipt size={20} />
-          <span className={s.documentThumbTitle}>{t('itemDetail.purchaseProof')}</span>
-          <span className={s.documentThumbSub}>{purchaseSummary}</span>
+      {!warranty.expiresAt ? (
+        <p className={d.emptyState}>{t('itemDetail.warrantyNotSetHint')}</p>
+      ) : (
+        <div className={d.kvList}>
+          <KvRow label={t('itemDetail.warrantyExpiry')}>{formatDate(warranty.expiresAt)}</KvRow>
+          <KvRow label={t('itemDetail.daysLeft')}>
+            <span className={s.warrantySummary[warranty.tone === 'neutral' ? 'info' : warranty.tone]}>{warranty.summary}</span>
+          </KvRow>
+          <KvRow label={t('itemDetail.warrantyContact')}>{item.warranty_contact ?? t('common.notSet')}</KvRow>
         </div>
-        <button type="button" className={s.documentThumb} data-card={credentialCount > 0 || undefined} onClick={() => setCredentialOpen(true)}>
-          <IconKey size={20} />
-          <span className={s.documentThumbTitle}>{t('itemDetail.platformCredentials')}</span>
-          <span className={s.documentThumbSub}>
-            {credentialCount > 0 ? t('itemDetail.credentialCount', { count: credentialCount }) : t('common.add')}
-          </span>
-        </button>
-        <button type="button" className={s.documentAdd} onClick={() => setCredentialOpen(true)}>
-          <IconPlus size={16} />
-          {t('itemDetail.addCredential')}
-        </button>
-      </div>
-      <div className={s.kvList}>
-        <KvRow label={t('itemDetail.warrantyExpiry')}>{warranty.expiresAt ? formatDate(warranty.expiresAt) : t('common.notSet')}</KvRow>
-        <KvRow label={t('itemDetail.daysLeft')}>{warranty.summary}</KvRow>
-        <KvRow label={t('itemDetail.warrantyContact')}>{item.warranty_contact ?? t('common.notSet')}</KvRow>
-        <KvRow label={t('items.serialNumber')}>
-          <InlineCode text={item.serial_number ?? t('common.notSet')} />
-        </KvRow>
-      </div>
+      )}
       {editing && (
         <WarrantyEditDialog
           item={item}
@@ -450,18 +507,105 @@ function WarrantyPanel({ item }: { item: Item }) {
           }}
         />
       )}
-      {credentialOpen && (
+    </DetailSection>
+  );
+}
+
+function PurchasePanel({ item, isVirtual, proofs, uploadPending, onPickProof, onDeleteProof, onEdit }: {
+  item: Item;
+  isVirtual: boolean;
+  proofs: Attachment[];
+  uploadPending: boolean;
+  onPickProof: (file: File | undefined) => void;
+  onDeleteProof: (proof: Attachment) => void;
+  onEdit: () => void;
+}) {
+  const { t } = useTranslation();
+  const addons = useQuery({ queryKey: ['item', item.id, 'addons'], queryFn: () => virtualAssetsApi.listAddons(item.id) });
+  const addonList = addons.data?.addons ?? [];
+  return (
+    <DetailSection
+      icon={<IconReceipt size={15} />}
+      title={t('itemDetail.purchaseInfo')}
+      action={<Button variant="ghost" size="sm" onClick={onEdit}>{t('common.edit')}</Button>}
+    >
+      <div className={d.kvList}>
+        <KvRow label={t('itemDetail.purchasedAt')}>{item.purchase_date ? formatDate(item.purchase_date) : t('common.notSet')}</KvRow>
+        <KvRow label={t('items.purchasePrice')}>{item.purchase_price != null ? formatPrice(item.purchase_price, item.purchase_currency, t) : t('common.notSet')}</KvRow>
+        <KvRow label={t('assets.purchasePlatform')}>{item.purchase_platform ?? t('common.notSet')}</KvRow>
+      </div>
+      <ProofStrip proofs={proofs} uploadPending={uploadPending} onPick={onPickProof} onDelete={onDeleteProof} />
+      {isVirtual && addons.isError && <div className={d.emptyState}>{t('common.loadFailed')}</div>}
+      {isVirtual && addonList.length > 0 && (
+        <>
+          <span className={d.mutedText}>{t('itemDetail.addonPurchases')}</span>
+          <div className={d.kvList}>
+            {addonList.map((addon: any) => (
+              <KvRow label={addon.name} key={addon.id}>
+                {addon.price != null ? formatPrice(addon.price, addon.currency, t) : t('common.notSet')}
+              </KvRow>
+            ))}
+          </div>
+        </>
+      )}
+    </DetailSection>
+  );
+}
+
+function PlatformSection({ itemId, itemName }: { itemId: string; itemName: string }) {
+  const { t } = useTranslation();
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<VirtualCredential | null>(null);
+  const { requestDelete, deleteDialog } = useCredentialDelete();
+  const creds = useQuery({ queryKey: ['item', itemId, 'credentials'], queryFn: () => virtualAssetsApi.listCredentials(itemId) });
+  const credentials = creds.data?.credentials ?? [];
+
+  return (
+    <DetailSection
+      icon={<IconKey size={15} />}
+      title={t('itemDetail.platformCredentials')}
+      action={<Button variant="ghost" size="sm" onClick={() => setFormOpen(true)}>{t('itemDetail.addCredential')}</Button>}
+    >
+      {creds.isLoading ? <Spinner /> : creds.isError ? (
+        <div className={d.emptyState}>{t('common.loadFailed')}</div>
+      ) : credentials.length === 0 ? (
+        <div className={d.emptyState}>{t('itemDetail.noCredentials')}</div>
+      ) : (
+        <div className={d.listStack}>
+          {credentials.map((credential: VirtualCredential) => (
+            <div className={d.listRow} key={credential.id}>
+              <span className={d.listThumb}><IconKey size={15} /></span>
+              <span className={d.listMeta}>
+                <span className={d.listName}>{credential.platform}</span>
+                {credential.account && <span className={d.listSub}>{t('itemDetail.accountLabel')}: {credential.account}</span>}
+                {credential.order_id && <span className={d.listSub}>{t('itemDetail.orderLabel')}: {credential.order_id}</span>}
+                {credential.license_key && (
+                  <LicenseKeyBox licenseKey={credential.license_key} />
+                )}
+              </span>
+              <span className={s.rowActions}>
+                <Button variant="ghost" size="icon-sm" aria-label={t('common.edit')} onClick={() => setEditing(credential)}>
+                  <IconPencil size={14} />
+                </Button>
+                <Button variant="ghost" size="icon-sm" aria-label={t('common.delete')} onClick={() => requestDelete(credential, itemName)}>
+                  <IconTrash size={14} />
+                </Button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {formOpen && <CredentialFormDialog open itemId={itemId} onClose={() => setFormOpen(false)} />}
+      {editing && (
         <CredentialFormDialog
           open
-          itemId={item.id}
-          onClose={() => {
-            setCredentialOpen(false);
-            queryClient.invalidateQueries({ queryKey: ['item', item.id, 'credentials'] });
-            queryClient.invalidateQueries({ queryKey: ['virtual-credentials'] });
-          }}
+          credential={editing}
+          itemId={editing.item_id}
+          onClose={() => setEditing(null)}
         />
       )}
-    </SectionCard>
+      {deleteDialog}
+    </DetailSection>
   );
 }
 
@@ -475,11 +619,13 @@ function TasksPanel({ itemId }: { itemId: string }) {
   const pending = all.filter((r) => !r.is_dismissed && !r.sent_at);
 
   return (
-    <SectionCard icon={<IconBell size={15} />} title={t('itemDetail.tasks')}>
+    <DetailSection icon={<IconBell size={15} />} title={t('itemDetail.tasks')}>
       {reminders.isPending ? (
         <Spinner />
+      ) : reminders.isError ? (
+        <div className={d.emptyState}>{t('common.loadFailed')}</div>
       ) : pending.length === 0 ? (
-        <div className={s.taskEmpty}>{t('reminders.noPendingForItem')}</div>
+        <div className={d.emptyState}>{t('reminders.noPendingForItem')}</div>
       ) : (
         <div className={s.taskList}>
           {pending.map((r) => (
@@ -487,10 +633,10 @@ function TasksPanel({ itemId }: { itemId: string }) {
           ))}
         </div>
       )}
-      <Link to="/reminders" className={s.blockLinkButton}>
+      <Link to="/reminders" className={d.blockLinkButton}>
         {t('itemDetail.viewAllTasks')}
       </Link>
-    </SectionCard>
+    </DetailSection>
   );
 }
 
@@ -504,53 +650,27 @@ function StatusPanel({ statusOptions, status, isOnline, pending, onChange, locat
 }) {
   const { t } = useTranslation();
   return (
-    <SectionCard icon={<IconMapPin size={15} />} title={t('itemDetail.statusAndLocation')}>
-      <div className={s.kvList}>
+    <DetailSection icon={<IconMapPin size={15} />} title={t('itemDetail.statusAndLocation')}>
+      <div className={d.kvList}>
         <KvRow label={t('items.status')}><StatusBadge status={status} /></KvRow>
         <KvRow label={t('items.location')}>{locationPath ?? t('common.notSet')}</KvRow>
       </div>
       {statusOptions.some((option) => option.value === status) && (
         <SelectField label={t('items.switchStatus')} options={statusOptions} value={status} disabled={!isOnline || pending} onChange={(event) => onChange(event.currentTarget.value)} />
       )}
-    </SectionCard>
-  );
-}
-
-function RelatedPanel({ itemId }: { itemId: string }) {
-  const { t } = useTranslation();
-  const { data, isLoading } = useQuery({ queryKey: ['item', itemId, 'contents'], queryFn: () => containerApi.listContents(itemId) });
-  const contents = data?.items ?? [];
-  return (
-    <SectionCard icon={<IconPackage size={15} />} title={t('itemDetail.relatedAssets')} action={<Button variant="ghost" size="sm" leftSection={<IconPlus size={14} />}>{t('common.add')}</Button>}>
-      {isLoading ? <Spinner /> : contents.length === 0 ? (
-        <div className={s.emptyState}>{t('itemDetail.noRelatedAssets')}</div>
-      ) : (
-        <div className={s.relatedList}>
-          {contents.slice(0, 3).map((child: any) => (
-            <Link key={child.id} to="/items/$itemId" params={{ itemId: child.id }} className={s.relatedRow}>
-              <span className={s.relatedThumb}><IconPackage size={15} /></span>
-              <span className={s.relatedMeta}>
-                <span className={s.relatedName}>{child.name}</span>
-                <span className={s.relatedSub}>{String(t(`status.${child.status}`, child.status))}</span>
-              </span>
-              <StatusBadge status={child.status} />
-            </Link>
-          ))}
-        </div>
-      )}
-    </SectionCard>
+    </DetailSection>
   );
 }
 
 function TimelineMeta({ item }: { item: Item }) {
   const { t } = useTranslation();
   return (
-    <SectionCard icon={<IconClock size={15} />} title={t('itemDetail.timestamps')}>
-      <div className={s.kvList}>
+    <DetailSection icon={<IconClock size={15} />} title={t('itemDetail.timestamps')}>
+      <div className={d.kvList}>
         <KvRow label={t('itemDetail.createdAt')}>{formatDateTime(item.created_at)}</KvRow>
         <KvRow label={t('itemDetail.updatedAt')}>{formatDateTime(item.updated_at)}</KvRow>
       </div>
-    </SectionCard>
+    </DetailSection>
   );
 }
 
@@ -562,124 +682,103 @@ function ConsumableSection({ itemId, item }: { itemId: string; item: Item }) {
   const min = item.min_stock_threshold ?? 0;
   const low = min > 0 && stock <= min;
   return (
-    <SectionCard icon={<IconShoppingCart size={15} />} title={t('itemDetail.consumable')} action={low ? <span className={s.warningText}><IconAlertTriangle size={12} />{t('itemDetail.belowThreshold')}</span> : undefined}>
+    <DetailSection
+      icon={<IconShoppingCart size={15} />}
+      title={t('itemDetail.consumable')}
+      action={low ? <span className={s.warningText}><IconAlertTriangle size={12} />{t('itemDetail.belowThreshold')}</span> : undefined}
+    >
       <div className={s.stockHero}>
         <span className={s.stockValue}>{stock}</span>
         <span>{t('common.pieces')}</span>
       </div>
-      <div className={s.kvList}>
+      <div className={d.kvList}>
         <KvRow label={t('itemDetail.minStock')}>{item.min_stock_threshold ?? '—'}</KvRow>
         <KvRow label={t('itemDetail.lifespanDays')}>{item.lifespan_days ?? '—'}</KvRow>
       </div>
       {item.type === 'tracked_spares' && <Button leftSection={<IconShoppingCart size={15} />} onClick={() => useOneMutation.mutate()} disabled={useOneMutation.isPending || stock <= 0}>{t('itemDetail.useOne')}</Button>}
-    </SectionCard>
-  );
-}
-
-function VirtualSection({ itemId }: { itemId: string }) {
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const [formOpen, setFormOpen] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const creds = useQuery({ queryKey: ['item', itemId, 'credentials'], queryFn: () => virtualAssetsApi.listCredentials(itemId) });
-  const addons = useQuery({ queryKey: ['item', itemId, 'addons'], queryFn: () => virtualAssetsApi.listAddons(itemId) });
-  const credentials = creds.data?.credentials ?? [];
-  const addonList = addons.data?.addons ?? [];
-  const deleteMutation = useMutation({
-    mutationFn: (credentialId: string) => virtualCredentialsApi.remove(credentialId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      queryClient.invalidateQueries({ queryKey: ['virtual-credentials'] });
-      queryClient.invalidateQueries({ queryKey: ['item'] });
-      setDeleting(null);
-    },
-  });
-  return (
-    <SectionCard
-      icon={<IconKey size={15} />}
-      title={t('itemDetail.platformCredentials')}
-      action={<Button variant="ghost" size="sm" onClick={() => setFormOpen(true)}>{t('itemDetail.addCredential')}</Button>}
-    >
-      {creds.isLoading ? <Spinner /> : credentials.length === 0 ? (
-        <div className={s.emptyState}>{t('itemDetail.noCredentials')}</div>
-      ) : credentials.map((credential: any) => (
-        <div className={s.compactCard} key={credential.id}>
-          <span className={s.compactTitle}>{credential.platform}</span>
-          {credential.account && <span className={s.compactSub}>{t('itemDetail.accountLabel')}: {credential.account}</span>}
-          {credential.order_id && <span className={s.compactSub}>{t('itemDetail.orderLabel')}: {credential.order_id}</span>}
-          <Button variant="ghost" size="sm" aria-label={t('common.delete')} onClick={() => setDeleting(credential.id)}>
-            <IconTrash size={13} />
-          </Button>
-        </div>
-      ))}
-      {addonList.length > 0 && (
-        <div className={s.kvList}>
-          {addonList.map((addon: any) => (
-            <KvRow label={addon.name} key={addon.id}>{addon.price != null ? `${addon.price} ${addon.currency ?? ''}`.trim() : t('common.notSet')}</KvRow>
-          ))}
-        </div>
-      )}
-      {formOpen && <CredentialFormDialog open itemId={itemId} onClose={() => setFormOpen(false)} />}
-      {deleting && (
-        <Dialog open title={t('credentials.deleteCredential')} onClose={() => setDeleting(null)}>
-          <p className={uiStyles.helpParagraph}>
-            {t('credentials.deleteCredentialConfirmSimple')}
-          </p>
-          <Button variant="destructive" onClick={() => deleteMutation.mutate(deleting)} disabled={deleteMutation.isPending}>
-            {t('common.delete')}
-          </Button>
-        </Dialog>
-      )}
-    </SectionCard>
+    </DetailSection>
   );
 }
 
 function LoansSection({ itemId }: { itemId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading } = useQuery({ queryKey: ['item', itemId, 'loans'], queryFn: () => loansApi.listForItem(itemId) });
+  const { data, isLoading, isError } = useQuery({ queryKey: ['item', itemId, 'loans'], queryFn: () => loansApi.listForItem(itemId) });
   const loans = data?.loans ?? [];
   return (
-    <SectionCard icon={<IconClipboardList size={15} />} title={t('itemDetail.loans')} action={<Button variant="ghost" size="sm">{t('itemDetail.addLoan')}</Button>}>
-      {isLoading ? <Spinner /> : loans.length === 0 ? (
-        <div className={s.emptyState}>{t('itemDetail.noLoans')}</div>
-      ) : loans.map((loan: any) => (
-        <div className={s.loanRow} key={loan.id}>
-          <span className={s.avatar}>{loan.borrower_name?.slice(0, 1) ?? '?'}</span>
-          <div className={s.loanMeta}>
-            <span className={s.compactTitle}>{loan.borrower_name}</span>
-            <span className={s.compactSub}>{formatDate(loan.loaned_at)}{loan.due_at ? ` / ${formatDate(loan.due_at)}` : ''}</span>
-          </div>
-          <Badge>{String(t(`status.${loan.status}`, loan.status))}</Badge>
+    <DetailSection icon={<IconClipboardList size={15} />} title={t('itemDetail.loans')}>
+      {isLoading ? <Spinner /> : isError ? <div className={d.emptyState}>{t('common.loadFailed')}</div> : loans.length === 0 ? (
+        <div className={d.emptyState}>{t('itemDetail.noLoans')}</div>
+      ) : (
+        <div className={d.listStack}>
+          {loans.map((loan: any) => (
+            <div className={d.listRow} key={loan.id}>
+              <span className={d.avatar}>{loan.borrower_name?.slice(0, 1) ?? '?'}</span>
+              <div className={d.listMeta}>
+                <span className={d.listName}>{loan.borrower_name}</span>
+                <span className={d.listSub}>{formatDate(loan.loaned_at)}{loan.due_at ? ` / ${formatDate(loan.due_at)}` : ''}</span>
+              </div>
+              <Badge>{String(t(`status.${loan.status}`, loan.status))}</Badge>
+            </div>
+          ))}
         </div>
-      ))}
-    </SectionCard>
+      )}
+    </DetailSection>
   );
 }
 
 function EventsSection({ itemId }: { itemId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading } = useQuery({ queryKey: ['item', itemId, 'events'], queryFn: () => suppliesExtendedApi.listEvents(itemId) });
+  const { data, isLoading, isError } = useQuery({ queryKey: ['item', itemId, 'events'], queryFn: () => suppliesExtendedApi.listEvents(itemId) });
   const events = data?.events ?? [];
   return (
-    <SectionCard icon={<IconHistory size={15} />} title={t('itemDetail.events')}>
-      {isLoading ? <Spinner /> : events.length === 0 ? (
-        <div className={s.emptyState}>{t('itemDetail.noEvents')}</div>
+    <DetailSection icon={<IconHistory size={15} />} title={t('itemDetail.events')}>
+      {isLoading ? <Spinner /> : isError ? <div className={d.emptyState}>{t('common.loadFailed')}</div> : events.length === 0 ? (
+        <div className={d.emptyState}>{t('itemDetail.noEvents')}</div>
       ) : (
-        <div className={s.timeline}>
-          {events.slice(0, 5).map((event: any) => (
-            <div className={s.timelineRow} key={event.id}>
-              <span className={s.timelineIcon}><IconHistory size={13} /></span>
-              <div className={s.timelineMeta}>
-                <span className={s.compactTitle}>{formatEventTitle(event, t)}</span>
-                <span className={s.compactSub}>{formatDateTime(event.created_at)}</span>
-                {formatEventPayload(event, t) && <code className={s.payload}>{formatEventPayload(event, t)}</code>}
+        <>
+          <div className={d.timeline}>
+            {events.slice(0, 5).map((event: any) => (
+              <div className={d.timelineRow} key={event.id}>
+                <span className={d.timelineIcon}><IconHistory size={13} /></span>
+                <div className={d.timelineMeta}>
+                  <span className={d.listName}>{formatEventTitle(event, t)}</span>
+                  <span className={d.listSub}>{formatDateTime(event.created_at)}</span>
+                  {formatEventPayload(event, t) && <code className={d.payload}>{formatEventPayload(event, t)}</code>}
+                </div>
               </div>
+            ))}
+          </div>
+          {events.length > 5 && <span className={d.mutedText}>{t('itemDetail.eventsTotal', { count: events.length })}</span>}
+        </>
+      )}
+    </DetailSection>
+  );
+}
+
+function ContainerSection({ itemId }: { itemId: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const { data, isLoading, isError } = useQuery({ queryKey: ['item', itemId, 'contents'], queryFn: () => containerApi.listContents(itemId) });
+  const removeMutation = useMutation({ mutationFn: (childId: string) => containerApi.remove(itemId, childId), onSuccess: () => qc.invalidateQueries({ queryKey: ['item', itemId, 'contents'] }) });
+  const contents = data?.items ?? [];
+  if (!isLoading && !isError && contents.length === 0) return null;
+  return (
+    <DetailSection icon={<IconPackage size={15} />} title={t('itemDetail.contents')}>
+      {isLoading ? <Spinner /> : isError ? <div className={d.emptyState}>{t('common.loadFailed')}</div> : (
+        <div className={d.listStack}>
+          {contents.map((child: any) => (
+            <div className={d.listRow} key={child.id}>
+              <span className={d.listThumb}><IconPackage size={15} /></span>
+              <span className={d.listMeta}>
+                <span className={d.listName}>{child.name}</span>
+                <span className={d.listSub}>{String(t(`status.${child.status}`, child.status))}</span>
+              </span>
+              <Button variant="quiet" size="sm" leftSection={<IconX size={13} />} disabled={removeMutation.isPending} onClick={() => removeMutation.mutate(child.id)}>{t('itemDetail.removeFromContainer')}</Button>
             </div>
           ))}
         </div>
       )}
-      {events.length > 5 && <button type="button" className={s.blockLinkButton}>{t('itemDetail.viewAllEvents')}</button>}
-    </SectionCard>
+    </DetailSection>
   );
 }
 
@@ -754,21 +853,25 @@ function MetadataSection({ itemId, item }: { itemId: string; item: Item }) {
 
   return (
     <>
-      <SectionCard icon={<IconTag size={15} />} title={t('itemDetail.customMetadata')} action={<Button variant="ghost" size="sm" leftSection={<IconPlus size={14} />} disabled={!isOnline} onClick={openAdd}>{t('common.add')}</Button>}>
+      <DetailSection
+        icon={<IconTag size={15} />}
+        title={t('itemDetail.customMetadata')}
+        action={<Button variant="ghost" size="sm" leftSection={<IconPlus size={14} />} disabled={!isOnline} onClick={openAdd}>{t('common.add')}</Button>}
+      >
         {entries.length > 0 ? (
-          <div className={s.kvList}>
+          <div className={d.kvList}>
             {entries.map(([key, value]) => (
-              <div className={s.kvRow} key={key}>
-                <span className={s.kvLabel}>{key}</span>
-                <button type="button" className={s.kvValueButton} onClick={() => openEdit(key, value)}>{value}</button>
-                <button type="button" className={s.iconOnly} onClick={() => handleRemove(key)} disabled={!isOnline || updateMutation.isPending} title={t('common.delete')}>
+              <div className={d.kvRow} key={key}>
+                <span className={d.kvLabel}>{key}</span>
+                <button type="button" className={d.kvValueButton} onClick={() => openEdit(key, value)}>{value}</button>
+                <button type="button" className={d.iconOnly} onClick={() => handleRemove(key)} disabled={!isOnline || updateMutation.isPending} title={t('common.delete')}>
                   <IconTrash size={14} />
                 </button>
               </div>
             ))}
           </div>
-        ) : <div className={s.emptyState}>{t('itemDetail.noMetadata')}</div>}
-      </SectionCard>
+        ) : <div className={d.emptyState}>{t('itemDetail.noMetadata')}</div>}
+      </DetailSection>
       <Dialog open={dialogOpen} title={editOriginalKey !== null ? t('itemDetail.editMetadata') : t('itemDetail.addMetadata')} onClose={() => setDialogOpen(false)}>
         <div className={s.dialogStack}>
           <TextField label={t('itemDetail.metadataKey')} value={formKey} onChange={(event) => setFormKey(event.currentTarget.value)} disabled={!isOnline || updateMutation.isPending} autoFocus />
@@ -783,41 +886,6 @@ function MetadataSection({ itemId, item }: { itemId: string; item: Item }) {
   );
 }
 
-function ContentsSection({ itemId }: { itemId: string }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ['item', itemId, 'contents'], queryFn: () => containerApi.listContents(itemId) });
-  const removeMutation = useMutation({ mutationFn: (childId: string) => containerApi.remove(itemId, childId), onSuccess: () => qc.invalidateQueries({ queryKey: ['item', itemId, 'contents'] }) });
-  const contents = data?.items ?? [];
-  if (!isLoading && contents.length === 0) return null;
-  return (
-    <SectionCard icon={<IconPackage size={15} />} title={t('itemDetail.contents')}>
-      {isLoading ? <Spinner /> : contents.map((child: any) => (
-        <div className={s.relatedRow} key={child.id}>
-          <span className={s.relatedThumb}><IconPackage size={15} /></span>
-          <span className={s.relatedMeta}>
-            <span className={s.relatedName}>{child.name}</span>
-            <span className={s.relatedSub}>{String(t(`status.${child.status}`, child.status))}</span>
-          </span>
-          <Button variant="quiet" size="sm" leftSection={<IconX size={13} />} disabled={removeMutation.isPending} onClick={() => removeMutation.mutate(child.id)}>{t('itemDetail.removeFromContainer')}</Button>
-        </div>
-      ))}
-    </SectionCard>
-  );
-}
-
-function SectionCard({ icon, title, action, children }: { icon: ReactNode; title: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <Card className={s.sectionCard} padded={false}>
-      <header className={s.sectionHead}>
-        <h2 className={s.sectionTitle}><span className={s.sectionIcon}>{icon}</span>{title}</h2>
-        {action}
-      </header>
-      <div className={s.sectionBody}>{children}</div>
-    </Card>
-  );
-}
-
 function SpecCell({ label, children, span }: { label: string; children: ReactNode; span?: boolean }) {
   return (
     <div className={s.specCell} data-span={span || undefined}>
@@ -829,9 +897,9 @@ function SpecCell({ label, children, span }: { label: string; children: ReactNod
 
 function KvRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className={s.kvRow}>
-      <span className={s.kvLabel}>{label}</span>
-      <span className={s.kvValue}>{children}</span>
+    <div className={d.kvRow}>
+      <span className={d.kvLabel}>{label}</span>
+      <span className={d.kvValue}>{children}</span>
     </div>
   );
 }
@@ -847,19 +915,6 @@ function InlineCode({ text }: { text: string }) {
       <IconQrcode size={14} />
     </span>
   );
-}
-
-function getWarrantyView(item: Item, t: (key: string, params?: any) => string): {
-  expiresAt?: number;
-  daysLeft: number | null;
-  summary: string;
-  tone: 'success' | 'warning' | 'danger' | 'neutral' | 'info';
-} {
-  if (!item.warranty_expires_at) return { daysLeft: null, summary: '—', tone: 'neutral' };
-  const daysLeft = Math.floor((item.warranty_expires_at - Date.now() / 1000) / 86400);
-  if (daysLeft < 0) return { expiresAt: item.warranty_expires_at, daysLeft, summary: t('itemDetail.warrantyExpired'), tone: 'danger' };
-  if (daysLeft <= 30) return { expiresAt: item.warranty_expires_at, daysLeft, summary: t('itemDetail.daysCount', { count: daysLeft }), tone: 'warning' };
-  return { expiresAt: item.warranty_expires_at, daysLeft, summary: t('itemDetail.daysCount', { count: daysLeft }), tone: 'success' };
 }
 
 function splitPath(path?: string) {

@@ -5,6 +5,7 @@ import {
   itemsApi,
   locationsApi,
   tagsApi,
+  type Item,
   type Location,
   type Tag,
 } from '../../api/client';
@@ -42,6 +43,19 @@ export function formatPrice(
   return `${price.toLocaleString()} ${currency ?? ''}`.trim();
 }
 
+export function getWarrantyView(item: Item, t: (key: string, params?: any) => string): {
+  expiresAt?: number;
+  daysLeft: number | null;
+  summary: string;
+  tone: 'success' | 'warning' | 'danger' | 'neutral' | 'info';
+} {
+  if (!item.warranty_expires_at) return { daysLeft: null, summary: '—', tone: 'neutral' };
+  const daysLeft = Math.floor((item.warranty_expires_at - Date.now() / 1000) / 86400);
+  if (daysLeft < 0) return { expiresAt: item.warranty_expires_at, daysLeft, summary: t('itemDetail.warrantyExpired'), tone: 'danger' };
+  if (daysLeft <= 30) return { expiresAt: item.warranty_expires_at, daysLeft, summary: t('itemDetail.daysCount', { count: daysLeft }), tone: 'warning' };
+  return { expiresAt: item.warranty_expires_at, daysLeft, summary: t('itemDetail.daysCount', { count: daysLeft }), tone: 'success' };
+}
+
 /* ── Hook ── */
 
 export function useItemDetailData(itemId: string) {
@@ -69,7 +83,7 @@ export function useItemDetailData(itemId: string) {
 
   const updatePrivacy = useMutation({
     mutationFn: (isPrivate: boolean) => itemsApi.update(itemId, { is_private: isPrivate }),
-    onSuccess: (next) => { toast.show(t('items.updated')); qc.setQueryData(['item', itemId], next); qc.invalidateQueries({ queryKey: ['items'] }); },
+    onSuccess: (next) => { toast.show(t(next.is_private ? 'items.nowPrivate' : 'items.nowShared')); qc.setQueryData(['item', itemId], next); qc.invalidateQueries({ queryKey: ['items'] }); },
     onError: (e: Error) => toast.show(t('items.statusUpdateFailed', { error: e.message })),
   });
 
@@ -77,6 +91,18 @@ export function useItemDetailData(itemId: string) {
     mutationFn: (file: File) => itemsApi.uploadPhoto(itemId, file),
     onSuccess: () => { toast.show(t('items.photoUploaded')); qc.invalidateQueries({ queryKey: ['item', itemId, 'attachments'] }); },
     onError: (e: Error) => toast.show(t('items.photoUploadFailed', { error: e.message })),
+  });
+
+  const uploadProof = useMutation({
+    mutationFn: (file: File) => itemsApi.uploadAttachment(itemId, file, 'purchase_proof'),
+    onSuccess: () => { toast.show(t('itemDetail.proofUploaded')); qc.invalidateQueries({ queryKey: ['item', itemId, 'attachments'] }); },
+    onError: (e: Error) => toast.show(t('itemDetail.proofUploadFailed', { error: e.message })),
+  });
+
+  const deleteProof = useMutation({
+    mutationFn: (attachmentId: string) => itemsApi.deleteAttachment(attachmentId),
+    onSuccess: () => { toast.show(t('itemDetail.proofDeleted')); qc.invalidateQueries({ queryKey: ['item', itemId, 'attachments'] }); },
+    onError: (e: Error) => toast.show(t('itemDetail.proofDeleteFailed', { error: e.message })),
   });
 
   const replaceTags = useMutation({
@@ -94,7 +120,9 @@ export function useItemDetailData(itemId: string) {
   // Computed
   const it = item.data;
   const locationPath = findLocationPath(locs.data?.tree, it?.location_id);
-  const photos = (attachments.data?.attachments ?? []).filter((att) => att.type === 'photo');
+  const allAttachments = attachments.data?.attachments ?? [];
+  const photos = allAttachments.filter((att) => att.type === 'photo');
+  const proofs = allAttachments.filter((att) => att.type === 'purchase_proof');
   const photoIdx = Math.min(selectedPhotoIdx, Math.max(photos.length - 1, 0));
   const currentPhoto = photos[photoIdx];
   const currentTags = it?.tags ?? [];
@@ -106,6 +134,16 @@ export function useItemDetailData(itemId: string) {
     if (!file) return;
     if (file.type && !file.type.startsWith('image/')) { toast.show(t('items.selectImage')); return; }
     uploadPhoto.mutate(file);
+  }
+
+  // Purchase proofs accept images and PDF invoices/order screenshots.
+  function handleProofPick(file: File | undefined) {
+    if (!file) return;
+    if (file.type && !file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      toast.show(t('itemDetail.selectProofFile'));
+      return;
+    }
+    uploadProof.mutate(file);
   }
 
   function addTag(tag: Tag) {
@@ -129,6 +167,7 @@ export function useItemDetailData(itemId: string) {
   return {
     t, item, attachments, locs, tags, it, locationPath,
     photos, photoIdx, currentPhoto, setSelectedPhotoIdx,
+    proofs, uploadProof, deleteProof, handleProofPick,
     currentTags, currentTagIDs, availableTags, tagOptions,
     statusOptions, fileInputRef, handlePhotoPick, addTag, removeTag,
     archive, updateStatus, updatePrivacy, uploadPhoto, replaceTags, createTag,
