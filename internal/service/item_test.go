@@ -521,7 +521,7 @@ func TestTrackedSparesRestockDismissesLowStockReminder(t *testing.T) {
 
 	// Restocking above the threshold dismisses the alert.
 	restocked := 5
-	if _, err := svc.Update(ctx, item.ID, ItemUpdateInput{CurrentStock: &restocked}); err != nil {
+	if _, err := svc.Update(ctx, item.ID, ItemUpdateInput{CurrentStock: Nullable[int]{Set: true, Val: &restocked}}); err != nil {
 		t.Fatalf("restock: %v", err)
 	}
 	if err := database.QueryRowContext(ctx,
@@ -718,6 +718,74 @@ func TestWarrantyItemsCreateReminderScheduleAndAggregateView(t *testing.T) {
 	}
 	if len(warrantyItems) != 1 || warrantyItems[0].ID != item.ID {
 		t.Fatalf("expected warranty item in aggregate view, got %#v", warrantyItems)
+	}
+}
+
+func TestItemUpdateNullableFieldsClearAndPreserve(t *testing.T) {
+	ctx := context.Background()
+	database := newTestDB(t)
+	svc := NewItemService(database)
+
+	expiresAt := time.Now().Add(20 * 24 * time.Hour).Unix()
+	contact := "400-123-456"
+	locID := createTestLocation(t, ctx, database, "书房")
+	item, err := svc.Create(ctx, ItemCreateInput{
+		Name:              "显示器",
+		Type:              model.ItemTypeDurable,
+		LocationID:        &locID,
+		WarrantyExpiresAt: &expiresAt,
+		WarrantyContact:   &contact,
+	})
+	if err != nil {
+		t.Fatalf("create warranty item: %v", err)
+	}
+
+	// Omitted nullable fields mean "leave unchanged".
+	renamed, err := svc.Update(ctx, item.ID, ItemUpdateInput{Name: strPtr("显示器 Pro")})
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if renamed.WarrantyExpiresAt == nil || *renamed.WarrantyExpiresAt != expiresAt {
+		t.Fatalf("omitted warranty date must be preserved, got %#v", renamed.WarrantyExpiresAt)
+	}
+	if renamed.WarrantyContact == nil || *renamed.WarrantyContact != contact {
+		t.Fatalf("omitted warranty contact must be preserved, got %#v", renamed.WarrantyContact)
+	}
+
+	// An explicit null clears the stored value and removes the reminders.
+	cleared, err := svc.Update(ctx, item.ID, ItemUpdateInput{
+		WarrantyExpiresAt: Nullable[int64]{Set: true},
+		WarrantyContact:   Nullable[string]{Set: true},
+	})
+	if err != nil {
+		t.Fatalf("clear warranty: %v", err)
+	}
+	if cleared.WarrantyExpiresAt != nil || cleared.WarrantyContact != nil {
+		t.Fatalf("expected cleared warranty fields, got %#v / %#v", cleared.WarrantyExpiresAt, cleared.WarrantyContact)
+	}
+	var count int
+	if err := database.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM reminders WHERE item_id = ? AND type IN ('warranty_30d','warranty_7d')`, item.ID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count reminders: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected warranty reminders removed after clearing, got %d", count)
+	}
+
+	// Setting a date again rebuilds the reminder schedule.
+	if _, err := svc.Update(ctx, item.ID, ItemUpdateInput{
+		WarrantyExpiresAt: Nullable[int64]{Set: true, Val: &expiresAt},
+	}); err != nil {
+		t.Fatalf("renew warranty: %v", err)
+	}
+	if err := database.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM reminders WHERE item_id = ? AND type IN ('warranty_30d','warranty_7d')`, item.ID,
+	).Scan(&count); err != nil {
+		t.Fatalf("count reminders: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected reminder schedule rebuilt, got %d reminders", count)
 	}
 }
 

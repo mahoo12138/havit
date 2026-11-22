@@ -54,26 +54,30 @@ type ItemCreateInput struct {
 	Metadata           json.RawMessage  `json:"metadata,omitempty"`
 }
 
+// ItemUpdateInput is a patch: omitted keys leave the stored value untouched.
+// Nullable fields additionally accept an explicit JSON null, which clears the
+// stored value (see Nullable). Name/Type/Status/IsPrivate are pointers: they
+// are required, flow-constrained, or boolean and cannot be "cleared".
 type ItemUpdateInput struct {
 	Name               *string           `json:"name,omitempty"`
-	Description        *string           `json:"description,omitempty"`
-	Category           *string           `json:"category,omitempty"`
+	Description        Nullable[string]  `json:"description,omitempty"`
+	Category           Nullable[string]  `json:"category,omitempty"`
 	Type               *model.ItemType   `json:"type,omitempty"`
 	Status             *model.ItemStatus `json:"status,omitempty"`
-	LocationID         *string           `json:"location_id,omitempty"`
-	HomeBaseLocationID *string           `json:"home_base_location_id,omitempty"`
-	CurrentStatusTag   *string           `json:"current_status_tag,omitempty"`
-	PurchasePrice      *float64          `json:"purchase_price,omitempty"`
-	PurchaseCurrency   *string           `json:"purchase_currency,omitempty"`
-	PurchaseDate       *int64            `json:"purchase_date,omitempty"`
-	PurchasePlatform   *string           `json:"purchase_platform,omitempty"`
-	SerialNumber       *string           `json:"serial_number,omitempty"`
-	WarrantyExpiresAt  *int64            `json:"warranty_expires_at,omitempty"`
-	WarrantyContact    *string           `json:"warranty_contact,omitempty"`
-	CurrentStock       *int              `json:"current_stock,omitempty"`
-	MinStockThreshold  *int              `json:"min_stock_threshold,omitempty"`
-	LifespanDays       *int              `json:"lifespan_days,omitempty"`
-	InUseSince         *int64            `json:"in_use_since,omitempty"`
+	LocationID         Nullable[string]  `json:"location_id,omitempty"`
+	HomeBaseLocationID Nullable[string]  `json:"home_base_location_id,omitempty"`
+	CurrentStatusTag   Nullable[string]  `json:"current_status_tag,omitempty"`
+	PurchasePrice      Nullable[float64] `json:"purchase_price,omitempty"`
+	PurchaseCurrency   Nullable[string]  `json:"purchase_currency,omitempty"`
+	PurchaseDate       Nullable[int64]   `json:"purchase_date,omitempty"`
+	PurchasePlatform   Nullable[string]  `json:"purchase_platform,omitempty"`
+	SerialNumber       Nullable[string]  `json:"serial_number,omitempty"`
+	WarrantyExpiresAt  Nullable[int64]   `json:"warranty_expires_at,omitempty"`
+	WarrantyContact    Nullable[string]  `json:"warranty_contact,omitempty"`
+	CurrentStock       Nullable[int]     `json:"current_stock,omitempty"`
+	MinStockThreshold  Nullable[int]     `json:"min_stock_threshold,omitempty"`
+	LifespanDays       Nullable[int]     `json:"lifespan_days,omitempty"`
+	InUseSince         Nullable[int64]   `json:"in_use_since,omitempty"`
 	IsPrivate          *bool             `json:"is_private,omitempty"`
 	Metadata           json.RawMessage   `json:"metadata,omitempty"`
 }
@@ -576,11 +580,11 @@ func (s *ItemService) Update(ctx context.Context, id string, in ItemUpdateInput)
 	if in.Name != nil {
 		cur.Name = *in.Name
 	}
-	if in.Description != nil {
-		cur.Description = in.Description
+	if in.Description.Set {
+		cur.Description = in.Description.Val
 	}
-	if in.Category != nil {
-		cur.Category = in.Category
+	if in.Category.Set {
+		cur.Category = in.Category.Val
 	}
 	if in.Type != nil {
 		if !validItemType(string(*in.Type)) {
@@ -609,49 +613,49 @@ func (s *ItemService) Update(ctx context.Context, id string, in ItemUpdateInput)
 		}
 		cur.Status = *in.Status
 	}
-	if in.LocationID != nil {
-		cur.LocationID = in.LocationID
+	if in.LocationID.Set {
+		cur.LocationID = in.LocationID.Val
 	}
-	if in.HomeBaseLocationID != nil {
-		cur.HomeBaseLocationID = in.HomeBaseLocationID
+	if in.HomeBaseLocationID.Set {
+		cur.HomeBaseLocationID = in.HomeBaseLocationID.Val
 	}
-	if in.CurrentStatusTag != nil {
-		cur.CurrentStatusTag = in.CurrentStatusTag
+	if in.CurrentStatusTag.Set {
+		cur.CurrentStatusTag = in.CurrentStatusTag.Val
 	}
-	if in.PurchasePrice != nil {
-		cur.PurchasePrice = in.PurchasePrice
+	if in.PurchasePrice.Set {
+		cur.PurchasePrice = in.PurchasePrice.Val
 	}
-	if in.PurchaseCurrency != nil {
-		cur.PurchaseCurrency = in.PurchaseCurrency
+	if in.PurchaseCurrency.Set {
+		cur.PurchaseCurrency = in.PurchaseCurrency.Val
 	}
-	if in.PurchaseDate != nil {
-		cur.PurchaseDate = in.PurchaseDate
+	if in.PurchaseDate.Set {
+		cur.PurchaseDate = in.PurchaseDate.Val
 	}
-	if in.PurchasePlatform != nil {
-		cur.PurchasePlatform = in.PurchasePlatform
+	if in.PurchasePlatform.Set {
+		cur.PurchasePlatform = in.PurchasePlatform.Val
 	}
-	if in.SerialNumber != nil {
-		cur.SerialNumber = in.SerialNumber
+	if in.SerialNumber.Set {
+		cur.SerialNumber = in.SerialNumber.Val
 	}
 	warrantyChanged := false
-	if in.WarrantyExpiresAt != nil {
-		cur.WarrantyExpiresAt = in.WarrantyExpiresAt
+	if in.WarrantyExpiresAt.Set {
+		cur.WarrantyExpiresAt = in.WarrantyExpiresAt.Val
 		warrantyChanged = true
 	}
-	if in.WarrantyContact != nil {
-		cur.WarrantyContact = in.WarrantyContact
+	if in.WarrantyContact.Set {
+		cur.WarrantyContact = in.WarrantyContact.Val
 	}
-	if in.CurrentStock != nil {
-		cur.CurrentStock = in.CurrentStock
+	if in.CurrentStock.Set {
+		cur.CurrentStock = in.CurrentStock.Val
 	}
-	if in.MinStockThreshold != nil {
-		cur.MinStockThreshold = in.MinStockThreshold
+	if in.MinStockThreshold.Set {
+		cur.MinStockThreshold = in.MinStockThreshold.Val
 	}
-	if in.LifespanDays != nil {
-		cur.LifespanDays = in.LifespanDays
+	if in.LifespanDays.Set {
+		cur.LifespanDays = in.LifespanDays.Val
 	}
-	if in.InUseSince != nil {
-		cur.InUseSince = in.InUseSince
+	if in.InUseSince.Set {
+		cur.InUseSince = in.InUseSince.Val
 	}
 	if len(in.Metadata) > 0 {
 		cur.Metadata = in.Metadata
@@ -1149,6 +1153,17 @@ func (s *ItemService) ensureContainerPath(ctx context.Context, itemID, container
 func (s *ItemService) Exit(ctx context.Context, id string, in ItemExitInput) (*model.Item, error) {
 	if _, err := s.Get(ctx, id); err != nil {
 		return nil, err
+	}
+	// Exiting a borrowed (or loan-liability) item would leave its loan active
+	// forever; settlement must go through the loan flow first.
+	var activeLoans int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM loans WHERE item_id = ? AND status IN ('active', 'unreturned')`, id,
+	).Scan(&activeLoans); err != nil {
+		return nil, err
+	}
+	if activeLoans > 0 {
+		return nil, errors.New("item has an outstanding loan; settle it through the loan flow first")
 	}
 	if in.ExitType == "" {
 		return nil, errors.New("exit_type required")
