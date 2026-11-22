@@ -17,10 +17,10 @@ RUN mkdir -p /app/internal/static \
 # ============================================================
 # Stage 2: build backend
 # ============================================================
-FROM golang:1.26.10-alpine AS backend
+FROM golang:1.27.4-alpine AS backend
 WORKDIR /app
 
-ARG VERSION=v1.0.0-rc.3
+ARG VERSION=v1.0.0
 
 RUN apk add --no-cache git
 
