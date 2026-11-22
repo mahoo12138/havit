@@ -32,6 +32,12 @@ jobs:
         working-directory: web
         run: pnpm install --frozen-lockfile
 
+      - name: UI and i18n audits
+        working-directory: web
+        run: |
+          pnpm run audit:ui
+          pnpm run audit:i18n
+
       - name: Build frontend
         working-directory: web
         run: pnpm build

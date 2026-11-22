@@ -22,3 +22,7 @@ web/playwright/.cache/
 # 本地智能体工作目录（会话计划、截图、记忆），不入库
 .zcode/
 .workbuddy/
+
+# e2e 运行产物（部分工具在仓库根目录生成）
+/test-results/
+/playwright-report/
