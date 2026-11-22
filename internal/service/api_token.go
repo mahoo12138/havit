@@ -53,13 +53,22 @@ func (s *APITokenService) Create(ctx context.Context, userID, name string, expir
 	plainText := patPrefix + secret
 	hash := hashToken(secret)
 
+	// Snapshot the user's current token_version: a later bump (password
+	// change, revoke-all-sessions) invalidates this token in Verify.
+	var tokenVersion int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT token_version FROM users WHERE id = ?`, userID,
+	).Scan(&tokenVersion); err != nil {
+		return nil, fmt.Errorf("read token version: %w", err)
+	}
+
 	id := ulid.Make().String()
 	now := time.Now().Unix()
 
 	if _, err := s.db.ExecContext(ctx,
-		`INSERT INTO api_tokens (id, user_id, name, token_hash, expires_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		id, userID, name, hash, expiresAt, now,
+		`INSERT INTO api_tokens (id, user_id, name, token_hash, expires_at, token_version, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, userID, name, hash, expiresAt, tokenVersion, now,
 	); err != nil {
 		return nil, fmt.Errorf("insert token: %w", err)
 	}
@@ -112,6 +121,8 @@ func (s *APITokenService) Revoke(ctx context.Context, id, userID string) error {
 }
 
 // Verify looks up a plaintext PAT and returns the owning user ID if valid.
+// A PAT stops working once the user's token_version has been bumped past the
+// version snapshotted at creation (password change, revoke-all-sessions).
 func (s *APITokenService) Verify(plainText string) (string, error) {
 	secret := stripPrefix(plainText)
 	if secret == "" {
@@ -121,9 +132,13 @@ func (s *APITokenService) Verify(plainText string) (string, error) {
 
 	var userID string
 	var expiresAt *int64
+	var tokenVersion, userVersion int
 	err := s.db.QueryRow(
-		`SELECT user_id, expires_at FROM api_tokens WHERE token_hash = ?`, hash,
-	).Scan(&userID, &expiresAt)
+		`SELECT t.user_id, t.expires_at, t.token_version, u.token_version
+		 FROM api_tokens t
+		 JOIN users u ON u.id = t.user_id
+		 WHERE t.token_hash = ?`, hash,
+	).Scan(&userID, &expiresAt, &tokenVersion, &userVersion)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", errors.New("invalid token")
@@ -133,6 +148,9 @@ func (s *APITokenService) Verify(plainText string) (string, error) {
 
 	if expiresAt != nil && *expiresAt > 0 && time.Now().Unix() > *expiresAt {
 		return "", errors.New("token expired")
+	}
+	if userVersion != tokenVersion {
+		return "", errors.New("token invalidated")
 	}
 
 	// Update last_used_at (best-effort, ignore errors).

@@ -38,11 +38,15 @@ func Auth(svc *service.AuthService, tokenSvc ...*service.APITokenService) func(h
 			if patSvc != nil && strings.HasPrefix(tok, "hv_pat_") {
 				userID, patErr := patSvc.Verify(tok)
 				if patErr == nil {
-					claims := &service.Claims{UserID: userID, Role: "member"}
-					// Look up the actual role from the user record.
-					if u, uErr := svc.GetUser(r.Context(), userID); uErr == nil {
-						claims.Role = u.Role
+					// The role must come from the user record; a lookup failure
+					// is a server error and must fail closed rather than fall
+					// back to a hardcoded role.
+					u, uErr := svc.GetUser(r.Context(), userID)
+					if uErr != nil {
+						writeJSON(w, http.StatusUnauthorized, apperr.ErrSessionExpired)
+						return
 					}
+					claims := &service.Claims{UserID: userID, Role: u.Role}
 					ctx := context.WithValue(r.Context(), claimsKey, claims)
 					ctx = service.WithCaller(ctx, &service.Caller{UserID: claims.UserID, Role: claims.Role})
 					next.ServeHTTP(w, r.WithContext(ctx))
