@@ -384,6 +384,9 @@ func (s *VirtualAssetService) GetCredential(ctx context.Context, id string) (*mo
 	if err != nil {
 		return nil, err
 	}
+	if err := s.ensureVisibleItem(ctx, c.ItemID); err != nil {
+		return nil, err
+	}
 	return s.decryptCredential(c), nil
 }
 

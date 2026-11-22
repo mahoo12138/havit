@@ -265,7 +265,7 @@ func (s *LocationService) Delete(ctx context.Context, id string) error {
 	if _, err := s.Get(ctx, id); err != nil {
 		return err
 	}
-	var childCount, itemCount int
+	var childCount, itemCount, homeBaseCount int
 	if err := s.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM locations WHERE parent_id = ?`, id,
 	).Scan(&childCount); err != nil {
@@ -276,7 +276,14 @@ func (s *LocationService) Delete(ctx context.Context, id string) error {
 	).Scan(&itemCount); err != nil {
 		return err
 	}
-	if childCount > 0 || itemCount > 0 {
+	// Essentials items reference a location as their home base; deleting one
+	// would otherwise die on the foreign key with a bare constraint error.
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM items WHERE home_base_location_id = ?`, id,
+	).Scan(&homeBaseCount); err != nil {
+		return err
+	}
+	if childCount > 0 || itemCount > 0 || homeBaseCount > 0 {
 		return errors.New("location not empty")
 	}
 

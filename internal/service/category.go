@@ -70,6 +70,11 @@ func (s *CategoryService) Update(ctx context.Context, id string, in CategoryUpda
 	if err != nil {
 		return nil, err
 	}
+	// System categories are shared seeds; renaming one would rewrite the
+	// category string on every user's items.
+	if current.IsSystem {
+		return nil, errors.New("system categories cannot be modified")
+	}
 
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
@@ -130,6 +135,11 @@ func (s *CategoryService) Delete(ctx context.Context, id string) error {
 	current, err := s.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+	// Deleting a system category would clear the category on every user's
+	// items that reference it.
+	if current.IsSystem {
+		return errors.New("system categories cannot be deleted")
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
