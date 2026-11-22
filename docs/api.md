@@ -106,7 +106,7 @@ Base URL: `/api/v1`
 | GET | `/reminders` | 提醒列表，可选 `due_only`、`item_id` |
 | POST | `/reminders/{id}/sent` | 标记已发送 |
 | POST | `/reminders/{id}/dismiss` | 忽略提醒 |
-| POST | `/notify/process-due` | 手动触发到期通知投递 |
+| POST | `/notify/process-due` | 手动触发到期通知投递（仅 owner，使用服务端时钟） |
 
 ## 凭证、导入导出与备份
 
@@ -126,8 +126,9 @@ Base URL: `/api/v1`
 | Method | Path | 说明 |
 |---|---|---|
 | GET | `/items/{id}/attachments` | 附件列表 |
-| POST | `/items/{id}/photos` | 上传照片 |
-| GET | `/attachments/{id}/content` | 读取附件 |
+| POST | `/items/{id}/attachments` | 上传附件，form 字段 `file` + `type`（`photo` / `purchase_proof`，凭证额外允许 PDF） |
+| POST | `/items/{id}/photos` | 上传照片（等价于 `type=photo` 的别名） |
+| GET | `/attachments/{id}/content` | 读取附件，图片内联、其他类型（PDF）以附件形式下载 |
 | DELETE | `/attachments/{id}` | 删除附件 |
 | POST | `/ai/recognize-photo` | 识别照片草稿 |
 | POST | `/items/{id}/ai-recognize-photo` | 识别并挂接照片 |
