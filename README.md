@@ -1,6 +1,6 @@
 # Havit
 
-个人与家庭的全资产台账。当前版本：**1.0.0-rc.3**（1.0 发布候选，pre-release）。
+个人与家庭的全资产台账。当前版本：**1.0.0**（首个正式版）。
 
 产品与技术文档见 `docs/havit-product-design.md`、`docs/havit-tech-architecture.md`；接口说明见 [`docs/api.md`](docs/api.md)；变更记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
@@ -8,7 +8,7 @@
 
 要求：
 
-- Go 1.25.7 以上（推荐使用 `go.mod` 中的 `toolchain go1.26.10`）
+- Go 1.26.0 以上（推荐使用 `go.mod` 中的 `toolchain go1.27.4`）
 - Node.js 22
 - pnpm 10.22.0
 
@@ -41,13 +41,13 @@ pnpm dev                   # http://localhost:5173，代理 /api -> :3000
 ### Docker
 
 ```bash
-docker build -t havit:1.0.0-rc.3 .
+docker build -t havit:1.0.0 .
 docker run -d \
   --name havit \
   -p 3000:3000 \
   -v "$PWD/data:/data" \
   -e HAVIT_MODE=release \
-  havit:1.0.0-rc.3
+  havit:1.0.0
 ```
 
 或使用 `docker compose up -d --build`。容器进程以 UID 10001 运行；Linux bind mount 需要提前给数据目录写权限，例如：

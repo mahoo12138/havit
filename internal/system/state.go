@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 )
 
-var Version = "v1.0.0-rc.3"
+var Version = "v1.0.0"
 
 type State struct {
 	mode       string
