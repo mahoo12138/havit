@@ -378,7 +378,7 @@ func (s *ExportService) loans(ctx context.Context) ([]*model.Loan, error) {
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT l.id, l.item_id, l.borrower_name, l.borrower_contact,
-			l.loaned_at, l.due_at, l.returned_at, l.status,
+			l.loaned_at, l.due_at, l.returned_at, l.status, l.pre_loan_status,
 			l.compensation, l.compensation_currency, l.notes
 		FROM loans l
 		JOIN items i ON i.id = l.item_id

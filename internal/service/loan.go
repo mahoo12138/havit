@@ -90,6 +90,15 @@ func (s *LoanService) Create(ctx context.Context, itemID string, in LoanCreateIn
 		return nil, errors.New("item already has an outstanding loan")
 	}
 
+	// Snapshot the status the loan starts from so Return can restore it —
+	// an item parked as idle/for_sale should not silently become in_stock.
+	var preLoanStatus string
+	if err := tx.QueryRowContext(ctx,
+		`SELECT status FROM items WHERE id = ?`, itemID,
+	).Scan(&preLoanStatus); err != nil {
+		return nil, err
+	}
+
 	res, err := tx.ExecContext(ctx, `
 		UPDATE items SET status = ?, updated_at = ?
 		WHERE id = ? AND status IN ('in_stock', 'idle', 'for_sale')`,
@@ -105,10 +114,10 @@ func (s *LoanService) Create(ctx context.Context, itemID string, in LoanCreateIn
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO loans (
 			id, item_id, borrower_name, borrower_contact,
-			loaned_at, due_at, status, notes
-		) VALUES (?, ?, ?, ?, ?, ?, 'active', ?)`,
+			loaned_at, due_at, status, pre_loan_status, notes
+		) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
 		id, itemID, in.BorrowerName, in.BorrowerContact,
-		in.LoanedAt, in.DueAt, in.Notes,
+		in.LoanedAt, in.DueAt, preLoanStatus, in.Notes,
 	); err != nil {
 		return nil, err
 	}
@@ -150,7 +159,7 @@ func (s *LoanService) ListForItem(ctx context.Context, itemID string) ([]*model.
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, item_id, borrower_name, borrower_contact,
-			loaned_at, due_at, returned_at, status,
+			loaned_at, due_at, returned_at, status, pre_loan_status,
 			compensation, compensation_currency, notes
 		FROM loans
 		WHERE item_id = ?
@@ -215,7 +224,7 @@ func (s *LoanService) List(ctx context.Context) ([]*LoanWithItem, error) {
 func (s *LoanService) Get(ctx context.Context, id string) (*model.Loan, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, item_id, borrower_name, borrower_contact,
-			loaned_at, due_at, returned_at, status,
+			loaned_at, due_at, returned_at, status, pre_loan_status,
 			compensation, compensation_currency, notes
 		FROM loans
 		WHERE id = ?`, id)
@@ -267,10 +276,16 @@ func (s *LoanService) Return(ctx context.Context, id string, in LoanReturnInput)
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, errors.New("loan is no longer active")
 	}
+	// Restore the pre-loan status so idle/for_sale items keep it; anything
+	// unexpected (empty, borrowed, or an exit status) falls back to in_stock.
+	restore := model.ItemStatus(cur.PreLoanStatus)
+	if restore != model.StatusIdle && restore != model.StatusForSale {
+		restore = model.StatusInStock
+	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE items SET status = ?, updated_at = ?
 		WHERE id = ? AND status = ?`,
-		model.StatusInStock, now, cur.ItemID, model.StatusBorrowed,
+		restore, now, cur.ItemID, model.StatusBorrowed,
 	); err != nil {
 		return nil, err
 	}
@@ -327,12 +342,17 @@ func (s *LoanService) MarkUnreturned(ctx context.Context, id string, in LoanUnre
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, errors.New("loan is no longer active")
 	}
-	if _, err := tx.ExecContext(ctx, `
+	// Only a borrowed item may be marked unreturned — settling a stale loan
+	// must never resurrect a sold/lost/archived item into the active ledger.
+	if res, err = tx.ExecContext(ctx, `
 		UPDATE items SET status = ?, updated_at = ?
-		WHERE id = ?`,
-		model.StatusUnreturned, now, cur.ItemID,
+		WHERE id = ? AND status = ?`,
+		model.StatusUnreturned, now, cur.ItemID, model.StatusBorrowed,
 	); err != nil {
 		return nil, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, errors.New("item is no longer borrowed and cannot be marked unreturned")
 	}
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM reminders WHERE item_id = ? AND type = 'loan_due'`, cur.ItemID); err != nil {
@@ -433,7 +453,7 @@ func scanLoan(row loanScanner) (*model.Loan, error) {
 	var loan model.Loan
 	if err := row.Scan(
 		&loan.ID, &loan.ItemID, &loan.BorrowerName, &loan.BorrowerContact,
-		&loan.LoanedAt, &loan.DueAt, &loan.ReturnedAt, &loan.Status,
+		&loan.LoanedAt, &loan.DueAt, &loan.ReturnedAt, &loan.Status, &loan.PreLoanStatus,
 		&loan.Compensation, &loan.CompensationCurrency, &loan.Notes,
 	); err != nil {
 		return nil, err

@@ -135,6 +135,7 @@ type Loan struct {
 	DueAt                *int64   `json:"due_at,omitempty"`
 	ReturnedAt           *int64   `json:"returned_at,omitempty"`
 	Status               string   `json:"status"`
+	PreLoanStatus        string   `json:"pre_loan_status,omitempty"`
 	Compensation         *float64 `json:"compensation,omitempty"`
 	CompensationCurrency *string  `json:"compensation_currency,omitempty"`
 	Notes                *string  `json:"notes,omitempty"`
