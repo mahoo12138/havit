@@ -170,7 +170,6 @@ func main() {
 			loanH.Mount(r)
 			virtualAssetH.Mount(r)
 			reminderH.Mount(r)
-			notifyH.Mount(r)
 			abnormalH.Mount(r)
 			searchH.Mount(r)
 			barcodeH.Mount(r)
@@ -179,7 +178,8 @@ func main() {
 			apiTokenH.Mount(r)
 		})
 
-		// Owner-only routes (user management + instance config).
+		// Owner-only routes (user management + instance config + notify
+		// delivery, which consumes reminders across all users).
 		r.Group(func(r chi.Router) {
 			r.Use(authmw.Auth(authSvc, apiTokenSvc))
 			r.Use(authmw.RequireOwner)
@@ -187,6 +187,7 @@ func main() {
 			userH.Mount(r)
 			settingsH.Mount(r)
 			backupH.Mount(r)
+			notifyH.Mount(r)
 		})
 
 		// Routes that set their own per-route body limits (import 16 MB, attachment streams to disk).

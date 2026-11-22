@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -22,13 +22,10 @@ func (h *NotifyHandler) Mount(r chi.Router) {
 }
 
 func (h *NotifyHandler) processDue(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Now int64 `json:"now"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		in.Now = 0
-	}
-	result, err := h.svc.ProcessDue(r.Context(), in.Now)
+	// Delivery consumes every user's pending reminders, so the trigger time is
+	// always the server clock — a caller-supplied timestamp could force-deliver
+	// and permanently mark the whole backlog as sent.
+	result, err := h.svc.ProcessDue(r.Context(), time.Now().Unix())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

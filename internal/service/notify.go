@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"net/http"
 	"time"
 
@@ -107,7 +108,11 @@ func (g *HTTPNotifyGateway) Send(ctx context.Context, msg NotifyMessage) error {
 	ntfyURL := g.cfgSvc.GetString("notify.ntfy_url")
 	appriseURL := g.cfgSvc.GetString("notify.apprise_url")
 
-	sent := false
+	// Try every configured endpoint and report all failures together: an
+	// early return would both skip later endpoints and leave the reminder
+	// unmarked, re-delivering it to the endpoints that already succeeded.
+	var failures []string
+	configured := 0
 	for _, endpoint := range []struct {
 		url  string
 		kind string
@@ -119,13 +124,16 @@ func (g *HTTPNotifyGateway) Send(ctx context.Context, msg NotifyMessage) error {
 		if endpoint.url == "" {
 			continue
 		}
-		sent = true
+		configured++
 		if err := g.post(ctx, endpoint.url, endpoint.kind, msg); err != nil {
-			return err
+			failures = append(failures, fmt.Sprintf("%s: %v", endpoint.kind, err))
 		}
 	}
-	if !sent {
+	if configured == 0 {
 		return errors.New("notify gateway not configured")
+	}
+	if len(failures) > 0 {
+		return errors.New("delivery failed: " + strings.Join(failures, "; "))
 	}
 	return nil
 }
