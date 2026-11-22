@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/mahoo12138/havit/internal/service"
+	"github.com/mahoo12138/havit/internal/storage"
 )
 
 func TestRecognizeDraftPhotoRejectsInvalidUploads(t *testing.T) {
@@ -42,7 +43,7 @@ func TestRecognizeDraftPhotoRejectsInvalidUploads(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			database := newAuthTestDB(t)
-			attachmentSvc := service.NewAttachmentService(database, t.TempDir())
+			attachmentSvc := service.NewAttachmentService(database, storage.NewLocal(t.TempDir()), nil)
 			handler := NewAIHandler(service.NewAIRecognitionService(attachmentSvc, nil), 1)
 
 			body := bytes.NewBuffer(nil)

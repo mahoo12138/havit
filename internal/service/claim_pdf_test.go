@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/mahoo12138/havit/internal/model"
+	"github.com/mahoo12138/havit/internal/storage"
 )
 
 func TestStolenClaimPDFIncludesAssetLedgerAndAttachments(t *testing.T) {
 	ctx := context.Background()
 	database := newTestDB(t)
 	svc := NewItemService(database)
-	attachments := NewAttachmentService(database, t.TempDir())
+	attachments := NewAttachmentService(database, storage.NewLocal(t.TempDir()), nil)
 	locID := createTestLocation(t, ctx, database, "书房")
 
 	price := 8999.0

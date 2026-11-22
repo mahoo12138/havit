@@ -30,12 +30,34 @@ var allowedPhotoTypes = map[string]bool{
 	"image/tiff": true,
 }
 
+// Purchase proofs also accept PDFs: invoices and order confirmations are
+// usually PDFs rather than images.
+var allowedProofTypes = withPDF(allowedPhotoTypes)
+
+func withPDF(types map[string]bool) map[string]bool {
+	merged := make(map[string]bool, len(types)+1)
+	for k, v := range types {
+		merged[k] = v
+	}
+	merged["application/pdf"] = true
+	return merged
+}
+
+// uploadTypes maps the attachment type form field to its content-type
+// allowlist. The photo entry keeps POST /items/{id}/photos working as a
+// dedicated alias of the generic endpoint.
+var uploadTypes = map[model.AttachmentType]map[string]bool{
+	model.AttachmentTypePhoto:         allowedPhotoTypes,
+	model.AttachmentTypePurchaseProof: allowedProofTypes,
+}
+
 func NewAttachmentHandler(svc *service.AttachmentService, maxPhotoSizeMB int) *AttachmentHandler {
 	return &AttachmentHandler{svc: svc, maxPhotoSizeMB: maxPhotoSizeMB}
 }
 
 func (h *AttachmentHandler) Mount(r chi.Router) {
 	r.Get("/items/{itemID}/attachments", h.listItemAttachments)
+	r.Post("/items/{itemID}/attachments", h.uploadAttachment)
 	r.Post("/items/{itemID}/photos", h.uploadPhoto)
 	r.Get("/attachments/{attachmentID}/content", h.readContent)
 	r.Delete("/attachments/{attachmentID}", h.delete)
@@ -51,6 +73,20 @@ func (h *AttachmentHandler) listItemAttachments(w http.ResponseWriter, r *http.R
 }
 
 func (h *AttachmentHandler) uploadPhoto(w http.ResponseWriter, r *http.Request) {
+	h.storeUpload(w, r, model.AttachmentTypePhoto)
+}
+
+func (h *AttachmentHandler) uploadAttachment(w http.ResponseWriter, r *http.Request) {
+	rawType := strings.ToLower(strings.TrimSpace(r.FormValue("type")))
+	attType := model.AttachmentType(rawType)
+	if _, ok := uploadTypes[attType]; !ok {
+		writeError(w, 0, apperr.ErrUnsupportedFormat)
+		return
+	}
+	h.storeUpload(w, r, attType)
+}
+
+func (h *AttachmentHandler) storeUpload(w http.ResponseWriter, r *http.Request, attType model.AttachmentType) {
 	limit := int64(h.maxPhotoSizeMB)
 	if limit <= 0 {
 		limit = 20
@@ -66,16 +102,16 @@ func (h *AttachmentHandler) uploadPhoto(w http.ResponseWriter, r *http.Request) 
 	defer file.Close()
 
 	contentType := strings.ToLower(strings.TrimSpace(header.Header.Get("Content-Type")))
-	// Raster-only allowlist: SVG (and HTML masquerading as an image) would run
-	// scripts when served inline from the app origin.
-	if !allowedPhotoTypes[contentType] {
+	// Allowlist per attachment type: SVG (and HTML masquerading as an
+	// image) would run scripts when served inline from the app origin.
+	if !uploadTypes[attType][contentType] {
 		writeError(w, 0, apperr.ErrImageRequired)
 		return
 	}
 
 	att, err := h.svc.Store(r.Context(), service.StoreAttachmentInput{
 		ItemID:      chi.URLParam(r, "itemID"),
-		Type:        model.AttachmentTypePhoto,
+		Type:        attType,
 		Filename:    header.Filename,
 		ContentType: contentType,
 		Reader:      file,
@@ -107,7 +143,13 @@ func (h *AttachmentHandler) readContent(w http.ResponseWriter, r *http.Request) 
 		w.Header().Set("Content-Type", att.ContentType)
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Disposition", `inline; filename="`+strings.ReplaceAll(att.Filename, `"`, "")+`"`)
+	// Raster images render inline in the galleries; anything else (PDF
+	// proofs today) downloads instead of rendering in the app origin.
+	disposition := "inline"
+	if !allowedPhotoTypes[strings.ToLower(att.ContentType)] {
+		disposition = "attachment"
+	}
+	w.Header().Set("Content-Disposition", disposition+`; filename="`+strings.ReplaceAll(att.Filename, `"`, "")+`"`)
 	http.ServeContent(w, r, att.Filename, timeFromUnix(att.CreatedAt), file)
 }
 

@@ -21,6 +21,7 @@ import (
 	authmw "github.com/mahoo12138/havit/internal/middleware"
 	"github.com/mahoo12138/havit/internal/service"
 	"github.com/mahoo12138/havit/internal/static"
+	"github.com/mahoo12138/havit/internal/storage"
 	"github.com/mahoo12138/havit/internal/system"
 )
 
@@ -92,10 +93,20 @@ func main() {
 	reminderSvc := service.NewReminderService(database)
 	notifyGateway := service.NewHTTPNotifyGateway(configSvc)
 	notifySvc := service.NewNotifyService(reminderSvc, notifyGateway)
-	backupSvc := service.NewBackupService(database, cfg.Data.Dir, cfg.Backup.KeepDays)
+
+	// Attachment objects live on the local data directory by default, or on
+	// an S3-compatible bucket with storage.backend=s3. The local store stays
+	// wired as a read fallback in S3 mode so records written before a
+	// migration keep resolving, and backups restored from disk keep working.
+	primaryStore, secondaryStore, err := buildAttachmentStores(appCtx, cfg)
+	if err != nil {
+		slog.Error("init attachment storage", "err", err)
+		os.Exit(1)
+	}
+	attachmentSvc := service.NewAttachmentService(database, primaryStore, secondaryStore)
+	backupSvc := service.NewBackupService(database, cfg.Data.Dir, cfg.Backup.KeepDays, attachmentSvc)
 	searchSvc := service.NewSearchService(database)
 	barcodeSvc := service.NewBarcodeService("")
-	attachmentSvc := service.NewAttachmentService(database, cfg.Data.Dir)
 	prefsSvc := service.NewPreferencesService(database)
 	apiTokenSvc := service.NewAPITokenService(database)
 
@@ -222,4 +233,30 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
+}
+
+// buildAttachmentStores picks the attachment object store from config.
+// local: primary = dataDir, no fallback. s3: primary = bucket, fallback =
+// the local data directory so pre-migration records keep resolving.
+func buildAttachmentStores(ctx context.Context, cfg *config.Config) (primary, secondary storage.Store, err error) {
+	local := storage.NewLocal(cfg.Data.Dir)
+	if cfg.Storage.Backend != "s3" {
+		return local, nil, nil
+	}
+	s3Store, err := storage.NewS3(storage.S3Config{
+		Endpoint:        cfg.Storage.S3.Endpoint,
+		Region:          cfg.Storage.S3.Region,
+		Bucket:          cfg.Storage.S3.Bucket,
+		AccessKeyID:     cfg.Storage.S3.AccessKeyID,
+		SecretAccessKey: cfg.Storage.S3.SecretAccessKey,
+		UseSSL:          cfg.Storage.S3.UseSSL,
+		UsePathStyle:    cfg.Storage.S3.UsePathStyle,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s3Store.Probe(ctx); err != nil {
+		return nil, nil, err
+	}
+	return s3Store, local, nil
 }

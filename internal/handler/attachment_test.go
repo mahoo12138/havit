@@ -192,3 +192,133 @@ func TestPhotoUploadRejectsNonImageFile(t *testing.T) {
 		t.Fatalf("expected non-image upload 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// multipartUpload posts a single-file form to the generic attachment
+// endpoint. typeField may be empty to exercise the dedicated photo alias.
+func postMultipartFile(t *testing.T, router http.Handler, token, path, typeField, filename, contentType, content string) *httptest.ResponseRecorder {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, mime.QEncoding.Encode("utf-8", filename)))
+	header.Set("Content-Type", contentType)
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		t.Fatalf("create part: %v", err)
+	}
+	if _, err := part.Write([]byte(content)); err != nil {
+		t.Fatalf("write part: %v", err)
+	}
+	if typeField != "" {
+		if err := writer.WriteField("type", typeField); err != nil {
+			t.Fatalf("write type field: %v", err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+	req := authedRequest(http.MethodPost, path, token, strings.NewReader(body.String()))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	return rec
+}
+
+func seedAttachmentTarget(t *testing.T) (http.Handler, string, string) {
+	t.Helper()
+	router := newAuthTestRouter(t)
+	token := setupToken(t, router)
+	createLoc := postAuthedJSON(t, router, "/api/v1/locations/", token, map[string]string{"name": "书房"})
+	var loc struct {
+		ID string `json:"id"`
+	}
+	decodeJSON(t, createLoc, &loc)
+	createItem := postAuthedJSON(t, router, "/api/v1/items/", token, map[string]any{
+		"name": "相机", "type": "durable", "location_id": loc.ID,
+	})
+	var item struct {
+		ID string `json:"id"`
+	}
+	decodeJSON(t, createItem, &item)
+	return router, token, item.ID
+}
+
+func TestPurchaseProofUploadAcceptsPDFAndDownloadsInline(t *testing.T) {
+	router, token, itemID := seedAttachmentTarget(t)
+
+	upload := postMultipartFile(t, router, token, "/api/v1/items/"+itemID+"/attachments", "purchase_proof",
+		"invoice.pdf", "application/pdf", "fake-pdf")
+	if upload.Code != http.StatusCreated {
+		t.Fatalf("expected proof upload 201, got %d: %s", upload.Code, upload.Body.String())
+	}
+	var uploaded struct {
+		ID          string `json:"id"`
+		Type        string `json:"type"`
+		Size        int64  `json:"size"`
+		ContentType string `json:"content_type"`
+	}
+	decodeJSON(t, upload, &uploaded)
+	if uploaded.Type != "purchase_proof" || uploaded.ContentType != "application/pdf" || uploaded.Size != int64(len("fake-pdf")) {
+		t.Fatalf("unexpected upload response: %#v", uploaded)
+	}
+
+	read := httptest.NewRecorder()
+	router.ServeHTTP(read, authedRequest(http.MethodGet, "/api/v1/attachments/"+uploaded.ID+"/content", token, nil))
+	if read.Code != http.StatusOK || read.Body.String() != "fake-pdf" {
+		t.Fatalf("expected proof content, got %d: %s", read.Code, read.Body.String())
+	}
+	disposition := read.Header().Get("Content-Disposition")
+	if !strings.HasPrefix(disposition, "attachment") {
+		t.Fatalf("expected PDF to download as attachment, got %q", disposition)
+	}
+
+	// Images of the same type still render inline.
+	img := postMultipartFile(t, router, token, "/api/v1/items/"+itemID+"/attachments", "purchase_proof",
+		"receipt.jpg", "image/jpeg", "fake-jpeg")
+	if img.Code != http.StatusCreated {
+		t.Fatalf("expected image proof upload 201, got %d: %s", img.Code, img.Body.String())
+	}
+	var imgAtt struct {
+		ID string `json:"id"`
+	}
+	decodeJSON(t, img, &imgAtt)
+	imgRead := httptest.NewRecorder()
+	router.ServeHTTP(imgRead, authedRequest(http.MethodGet, "/api/v1/attachments/"+imgAtt.ID+"/content", token, nil))
+	if got := imgRead.Header().Get("Content-Disposition"); !strings.HasPrefix(got, "inline") {
+		t.Fatalf("expected image to serve inline, got %q", got)
+	}
+}
+
+func TestAttachmentUploadRejectsBadTypeAndDisallowedFormats(t *testing.T) {
+	router, token, itemID := seedAttachmentTarget(t)
+
+	if rec := postMultipartFile(t, router, token, "/api/v1/items/"+itemID+"/attachments", "invoice",
+		"evil.pdf", "application/pdf", "x"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected unknown type rejected, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec := postMultipartFile(t, router, token, "/api/v1/items/"+itemID+"/attachments", "purchase_proof",
+		"evil.svg", "image/svg+xml", "<svg/>"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected SVG proof rejected, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec := postMultipartFile(t, router, token, "/api/v1/items/"+itemID+"/attachments", "photo",
+		"note.txt", "text/plain", "x"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected text photo rejected, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGenericAttachmentEndpointAcceptsPhotoType(t *testing.T) {
+	router, token, itemID := seedAttachmentTarget(t)
+
+	upload := postMultipartFile(t, router, token, "/api/v1/items/"+itemID+"/attachments", "photo",
+		"camera.jpg", "image/jpeg", "fake-jpeg")
+	if upload.Code != http.StatusCreated {
+		t.Fatalf("expected photo upload 201, got %d: %s", upload.Code, upload.Body.String())
+	}
+	var uploaded struct {
+		Type string `json:"type"`
+	}
+	decodeJSON(t, upload, &uploaded)
+	if uploaded.Type != "photo" {
+		t.Fatalf("expected photo type, got %q", uploaded.Type)
+	}
+}

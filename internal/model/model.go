@@ -30,7 +30,8 @@ const (
 )
 
 const (
-	AttachmentTypePhoto AttachmentType = "photo"
+	AttachmentTypePhoto         AttachmentType = "photo"
+	AttachmentTypePurchaseProof AttachmentType = "purchase_proof"
 )
 
 type Item struct {

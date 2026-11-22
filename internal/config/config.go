@@ -50,9 +50,37 @@ type AIConfig struct {
 }
 
 type StorageConfig struct {
-	MaxPhotoSizeMB      int `mapstructure:"max_photo_size_mb"`
-	MaxAttachmentSizeMB int `mapstructure:"max_attachment_size_mb"`
-	MaxTotalSizeGB      int `mapstructure:"max_total_size_gb"`
+	MaxPhotoSizeMB      int             `mapstructure:"max_photo_size_mb"`
+	MaxAttachmentSizeMB int             `mapstructure:"max_attachment_size_mb"`
+	MaxTotalSizeGB      int             `mapstructure:"max_total_size_gb"`
+	Backend             string          `mapstructure:"backend"`
+	S3                  S3StorageConfig `mapstructure:"s3"`
+}
+
+// S3StorageConfig points at an S3-compatible endpoint (MinIO, OmniStore,
+// R2, ...). Keys map to HAVIT_STORAGE_S3_* environment variables.
+type S3StorageConfig struct {
+	Endpoint        string `mapstructure:"endpoint"`
+	Region          string `mapstructure:"region"`
+	Bucket          string `mapstructure:"bucket"`
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	SecretAccessKey string `mapstructure:"secret_access_key"`
+	UseSSL          bool   `mapstructure:"use_ssl"`
+	UsePathStyle    bool   `mapstructure:"use_path_style"`
+}
+
+func (c StorageConfig) Validate() error {
+	switch c.Backend {
+	case "local":
+		return nil
+	case "s3":
+		if c.S3.Endpoint == "" || c.S3.Bucket == "" || c.S3.AccessKeyID == "" || c.S3.SecretAccessKey == "" {
+			return errors.New("storage.backend=s3 requires storage.s3.endpoint, bucket, access_key_id and secret_access_key")
+		}
+		return nil
+	default:
+		return fmt.Errorf("storage.backend must be \"local\" or \"s3\", got %q", c.Backend)
+	}
 }
 
 type BackupConfig struct {
@@ -94,6 +122,17 @@ func LoadFrom(configPaths []string) (*Config, error) {
 	v.SetDefault("storage.max_photo_size_mb", 20)
 	v.SetDefault("storage.max_attachment_size_mb", 50)
 	v.SetDefault("storage.max_total_size_gb", 10)
+	v.SetDefault("storage.backend", "local")
+	// Empty defaults register the S3 keys with viper so HAVIT_STORAGE_S3_*
+	// environment variables reach Unmarshal (AutomaticEnv only feeds keys
+	// viper already knows about).
+	v.SetDefault("storage.s3.endpoint", "")
+	v.SetDefault("storage.s3.region", "us-east-1")
+	v.SetDefault("storage.s3.bucket", "")
+	v.SetDefault("storage.s3.access_key_id", "")
+	v.SetDefault("storage.s3.secret_access_key", "")
+	v.SetDefault("storage.s3.use_ssl", true)
+	v.SetDefault("storage.s3.use_path_style", true)
 	v.SetDefault("backup.enabled", true)
 	v.SetDefault("backup.cron", "0 3 * * *")
 	v.SetDefault("backup.keep_days", 30)
@@ -126,6 +165,10 @@ func LoadFrom(configPaths []string) (*Config, error) {
 
 	var cfg Config
 	_ = v.Unmarshal(&cfg)
+
+	if err := cfg.Storage.Validate(); err != nil {
+		return nil, err
+	}
 
 	// The generated secret is written to <data_dir>/config.yaml, which is not
 	// one of the default search paths. Read it back explicitly so a restart

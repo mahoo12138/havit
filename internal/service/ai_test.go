@@ -12,6 +12,7 @@ import (
 
 	"github.com/mahoo12138/havit/internal/config"
 	"github.com/mahoo12138/havit/internal/model"
+	"github.com/mahoo12138/havit/internal/storage"
 )
 
 type stubAIProvider struct {
@@ -30,7 +31,7 @@ func (p stubAIProvider) ParseSearchQuery(ctx context.Context, query string) (*Se
 func TestAIRecognitionDraftFallsBackToManualWithoutProvider(t *testing.T) {
 	ctx := context.Background()
 	database := newTestDB(t)
-	svc := NewAIRecognitionService(NewAttachmentService(database, t.TempDir()), nil)
+	svc := NewAIRecognitionService(NewAttachmentService(database, storage.NewLocal(t.TempDir()), nil), nil)
 
 	result, err := svc.RecognizeDraft(ctx, RecognizeDraftInput{
 		ContentType: "image/png",
@@ -53,7 +54,7 @@ func TestAIRecognitionDraftFallsBackToManualWhenProviderFails(t *testing.T) {
 	ctx := context.Background()
 	database := newTestDB(t)
 	svc := NewAIRecognitionService(
-		NewAttachmentService(database, t.TempDir()),
+		NewAttachmentService(database, storage.NewLocal(t.TempDir()), nil),
 		stubAIProvider{err: errors.New("provider unavailable")},
 	)
 
@@ -81,7 +82,7 @@ func TestAIRecognitionDraftReturnsProviderDraft(t *testing.T) {
 	category := "数码硬件"
 	description := "全画幅相机"
 	svc := NewAIRecognitionService(
-		NewAttachmentService(database, t.TempDir()),
+		NewAttachmentService(database, storage.NewLocal(t.TempDir()), nil),
 		stubAIProvider{draft: &ItemDraft{Name: &name, Category: &category, Description: &description}},
 	)
 
@@ -115,7 +116,7 @@ func TestAIRecognizeItemStoresSourcePhotoAfterProviderSuccess(t *testing.T) {
 		t.Fatalf("create item: %v", err)
 	}
 	name := "Sony A7M4"
-	attachmentSvc := NewAttachmentService(database, t.TempDir())
+	attachmentSvc := NewAttachmentService(database, storage.NewLocal(t.TempDir()), nil)
 	svc := NewAIRecognitionService(attachmentSvc, stubAIProvider{draft: &ItemDraft{Name: &name}})
 
 	result, err := svc.RecognizeItem(ctx, RecognizeItemInput{
@@ -154,7 +155,7 @@ func TestAIRecognizeItemStoresOrdinaryPhotoWhenProviderFallsBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create item: %v", err)
 	}
-	attachmentSvc := NewAttachmentService(database, t.TempDir())
+	attachmentSvc := NewAttachmentService(database, storage.NewLocal(t.TempDir()), nil)
 	svc := NewAIRecognitionService(attachmentSvc, stubAIProvider{err: errors.New("provider unavailable")})
 
 	result, err := svc.RecognizeItem(ctx, RecognizeItemInput{

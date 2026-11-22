@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/mahoo12138/havit/internal/model"
+	"github.com/mahoo12138/havit/internal/storage"
 
 	apperr "github.com/mahoo12138/havit/internal/errors"
 )
@@ -21,12 +21,18 @@ import (
 var ErrAISourceProtected = apperr.ErrAISourceProtected
 
 type AttachmentService struct {
-	db      *sql.DB
-	dataDir string
+	db        *sql.DB
+	primary   storage.Store
+	secondary storage.Store
 }
 
-func NewAttachmentService(db *sql.DB, dataDir string) *AttachmentService {
-	return &AttachmentService{db: db, dataDir: dataDir}
+// NewAttachmentService wires the attachment store. `primary` is the
+// backend new uploads go to; `secondary` may be nil and is only consulted
+// for reads (and swept on delete) when a deployment migrated between
+// backends, so records written before the switch keep resolving without
+// a migration tool.
+func NewAttachmentService(db *sql.DB, primary, secondary storage.Store) *AttachmentService {
+	return &AttachmentService{db: db, primary: primary, secondary: secondary}
 }
 
 type StoreAttachmentInput struct {
@@ -56,24 +62,9 @@ func (s *AttachmentService) Store(ctx context.Context, in StoreAttachmentInput) 
 	id := ulid.Make().String()
 	filename := cleanFilename(in.Filename)
 	relPath := filepath.Join("attachments", in.ItemID, id+"-"+filename)
-	absPath := filepath.Join(s.dataDir, relPath)
-	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
-		return nil, fmt.Errorf("create attachment dir: %w", err)
-	}
-
-	file, err := os.OpenFile(absPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	size, err := s.primary.Put(ctx, relPath, in.Reader, -1, in.ContentType)
 	if err != nil {
-		return nil, fmt.Errorf("create attachment file: %w", err)
-	}
-	size, copyErr := io.Copy(file, in.Reader)
-	closeErr := file.Close()
-	if copyErr != nil {
-		_ = os.Remove(absPath)
-		return nil, fmt.Errorf("write attachment file: %w", copyErr)
-	}
-	if closeErr != nil {
-		_ = os.Remove(absPath)
-		return nil, fmt.Errorf("close attachment file: %w", closeErr)
+		return nil, fmt.Errorf("store attachment object: %w", err)
 	}
 
 	isAI := 0
@@ -86,7 +77,7 @@ func (s *AttachmentService) Store(ctx context.Context, in StoreAttachmentInput) 
 		id, in.ItemID, in.Type, filename, filepath.ToSlash(relPath), size, in.ContentType, isAI, now,
 	)
 	if err != nil {
-		_ = os.Remove(absPath)
+		_ = s.primary.Delete(ctx, relPath)
 		return nil, fmt.Errorf("insert attachment: %w", err)
 	}
 
@@ -131,7 +122,7 @@ func (s *AttachmentService) Get(ctx context.Context, id string) (*model.Attachme
 	return att, nil
 }
 
-func (s *AttachmentService) Open(ctx context.Context, id string) (*model.Attachment, *os.File, error) {
+func (s *AttachmentService) Open(ctx context.Context, id string) (*model.Attachment, io.ReadSeekCloser, error) {
 	att, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, nil, err
@@ -139,11 +130,66 @@ func (s *AttachmentService) Open(ctx context.Context, id string) (*model.Attachm
 	if err := s.ensureItemVisible(ctx, att.ItemID); err != nil {
 		return nil, nil, err
 	}
-	file, err := os.Open(filepath.Join(s.dataDir, filepath.FromSlash(att.Path)))
+	file, err := s.openObject(ctx, att.Path)
 	if err != nil {
 		return nil, nil, err
 	}
 	return att, file, nil
+}
+
+// OpenByPath reads attachment content by its stored key without item
+// visibility checks; it exists for the backup service, which streams
+// every record regardless of caller permissions.
+func (s *AttachmentService) OpenByPath(ctx context.Context, key string) (io.ReadSeekCloser, error) {
+	return s.openObject(ctx, key)
+}
+
+// openObject resolves a stored key against the active store, falling back
+// to the previous backend when the object is not there yet (local→S3
+// migrations, or a backup restored onto disk while running in S3 mode).
+func (s *AttachmentService) openObject(ctx context.Context, key string) (io.ReadSeekCloser, error) {
+	file, err := s.primary.Open(ctx, key)
+	if errors.Is(err, storage.ErrNotFound) && s.secondary != nil {
+		return s.secondary.Open(ctx, key)
+	}
+	return file, err
+}
+
+// Delete drops the DB record and sweeps both stores: the object may live
+// in either backend (or neither, if it was already cleaned up).
+func (s *AttachmentService) Delete(ctx context.Context, id string) error {
+	att, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.ensureItemVisible(ctx, att.ItemID); err != nil {
+		return err
+	}
+	if att.IsAISource {
+		return ErrAISourceProtected
+	}
+
+	if err := s.deleteObject(ctx, att.Path); err != nil {
+		return err
+	}
+
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM attachments WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("delete attachment record: %w", err)
+	}
+	return nil
+}
+
+func (s *AttachmentService) deleteObject(ctx context.Context, key string) error {
+	var firstErr error
+	if err := s.primary.Delete(ctx, key); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if s.secondary != nil {
+		if err := s.secondary.Delete(ctx, key); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 type attachmentScanner interface {
@@ -166,29 +212,6 @@ func scanAttachment(row attachmentScanner) (*model.Attachment, error) {
 	att.URL = "/api/v1/attachments/" + att.ID + "/content"
 	att.IsAISource = isAI != 0
 	return &att, nil
-}
-
-func (s *AttachmentService) Delete(ctx context.Context, id string) error {
-	att, err := s.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if err := s.ensureItemVisible(ctx, att.ItemID); err != nil {
-		return err
-	}
-	if att.IsAISource {
-		return ErrAISourceProtected
-	}
-
-	// Remove file from disk.
-	if err := os.Remove(filepath.Join(s.dataDir, filepath.FromSlash(att.Path))); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove attachment file: %w", err)
-	}
-
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM attachments WHERE id = ?`, id); err != nil {
-		return fmt.Errorf("delete attachment record: %w", err)
-	}
-	return nil
 }
 
 func (s *AttachmentService) ensureItemVisible(ctx context.Context, itemID string) error {

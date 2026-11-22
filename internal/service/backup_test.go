@@ -4,14 +4,38 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/mahoo12138/havit/internal/db"
+	"github.com/mahoo12138/havit/internal/model"
+	"github.com/mahoo12138/havit/internal/storage"
 )
+
+// seedAttachment stores an attachment record through the real service so
+// the backup only archives objects that the database references. It
+// returns the stored record; tests assert against its (ULID-prefixed)
+// path instead of hardcoding one.
+func seedAttachment(t *testing.T, ctx context.Context, database *sql.DB, dataDir, itemID, filename, content string) *model.Attachment {
+	t.Helper()
+	svc := NewAttachmentService(database, storage.NewLocal(dataDir), nil)
+	att, err := svc.Store(ctx, StoreAttachmentInput{
+		ItemID:      itemID,
+		Type:        model.AttachmentTypePhoto,
+		Filename:    filename,
+		ContentType: "image/jpeg",
+		Reader:      strings.NewReader(content),
+	})
+	if err != nil {
+		t.Fatalf("seed attachment: %v", err)
+	}
+	return att
+}
 
 func TestBackupRunCreatesConsistentSnapshotArchiveAndRemovesTempDB(t *testing.T) {
 	ctx := context.Background()
@@ -29,18 +53,18 @@ func TestBackupRunCreatesConsistentSnapshotArchiveAndRemovesTempDB(t *testing.T)
 		 VALUES ('loc-1', '书房', 'room', 0, 0, 1, 1)`); err != nil {
 		t.Fatalf("insert location: %v", err)
 	}
-	attachmentDir := filepath.Join(dataDir, "attachments", "item-1")
-	if err := os.MkdirAll(attachmentDir, 0o755); err != nil {
-		t.Fatalf("create attachments dir: %v", err)
+	if _, err := database.ExecContext(ctx,
+		`INSERT INTO items (id, name, type, status, location_id, created_at, updated_at)
+		 VALUES ('item-1', '相机', 'durable', 'in_stock', 'loc-1', 1, 1)`); err != nil {
+		t.Fatalf("insert item: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(attachmentDir, "photo.jpg"), []byte("photo"), 0o644); err != nil {
-		t.Fatalf("write attachment: %v", err)
-	}
+	att := seedAttachment(t, ctx, database, dataDir, "item-1", "photo.jpg", "photo")
 	if err := os.WriteFile(filepath.Join(dataDir, "config.yaml"), []byte("auth:\n  jwt_secret: backup-secret\n"), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
-	result, err := NewBackupService(database, dataDir, 30).Run(ctx)
+	attachmentSvc := NewAttachmentService(database, storage.NewLocal(dataDir), nil)
+	result, err := NewBackupService(database, dataDir, 30, attachmentSvc).Run(ctx)
 	if err != nil {
 		t.Fatalf("run backup: %v", err)
 	}
@@ -55,8 +79,8 @@ func TestBackupRunCreatesConsistentSnapshotArchiveAndRemovesTempDB(t *testing.T)
 	if !names["havit.db"] {
 		t.Fatalf("expected havit.db snapshot in archive, got %#v", names)
 	}
-	if !names["attachments/item-1/photo.jpg"] {
-		t.Fatalf("expected attachment in archive, got %#v", names)
+	if !names[att.Path] {
+		t.Fatalf("expected attachment %s in archive, got %#v", att.Path, names)
 	}
 	if !names["config.yaml"] {
 		t.Fatalf("expected config.yaml in archive, got %#v", names)
@@ -115,20 +139,15 @@ func TestBackupRestoresIntoFreshDataDir(t *testing.T) {
 		 VALUES ('item-1', '相机', 'durable', 'in_stock', 'loc-1', 1, 1)`); err != nil {
 		t.Fatalf("insert item: %v", err)
 	}
-	attachmentDir := filepath.Join(srcDir, "attachments", "item-1")
-	if err := os.MkdirAll(attachmentDir, 0o755); err != nil {
-		t.Fatalf("create attachments dir: %v", err)
-	}
-	photo := []byte("restore-me-photo")
-	if err := os.WriteFile(filepath.Join(attachmentDir, "photo.jpg"), photo, 0o644); err != nil {
-		t.Fatalf("write attachment: %v", err)
-	}
+	photo := "restore-me-photo"
+	att := seedAttachment(t, ctx, database, srcDir, "item-1", "photo.jpg", photo)
 	configBytes := []byte("auth:\n  jwt_secret: restore-secret\n")
 	if err := os.WriteFile(filepath.Join(srcDir, "config.yaml"), configBytes, 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
-	result, err := NewBackupService(database, srcDir, 30).Run(ctx)
+	attachmentSvc := NewAttachmentService(database, storage.NewLocal(srcDir), nil)
+	result, err := NewBackupService(database, srcDir, 30, attachmentSvc).Run(ctx)
 	if err != nil {
 		t.Fatalf("run backup: %v", err)
 	}
@@ -163,11 +182,11 @@ func TestBackupRestoresIntoFreshDataDir(t *testing.T) {
 		t.Fatalf("expected restored item, got %d", itemCount)
 	}
 
-	restoredPhoto, err := os.ReadFile(filepath.Join(restoreDir, "attachments", "item-1", "photo.jpg"))
+	restoredPhoto, err := os.ReadFile(filepath.Join(restoreDir, filepath.FromSlash(att.Path)))
 	if err != nil {
 		t.Fatalf("read restored attachment: %v", err)
 	}
-	if string(restoredPhoto) != string(photo) {
+	if string(restoredPhoto) != photo {
 		t.Fatalf("restored attachment bytes differ: got %q want %q", restoredPhoto, photo)
 	}
 	restoredConfig, err := os.ReadFile(filepath.Join(restoreDir, "config.yaml"))

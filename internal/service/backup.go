@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,17 +15,20 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mahoo12138/havit/internal/storage"
 )
 
 type BackupService struct {
-	db       *sql.DB
-	dataDir  string
-	keepDays int
-	runMu    sync.Mutex
+	db          *sql.DB
+	dataDir     string
+	keepDays    int
+	attachments *AttachmentService
+	runMu       sync.Mutex
 }
 
-func NewBackupService(db *sql.DB, dataDir string, keepDays int) *BackupService {
-	return &BackupService{db: db, dataDir: dataDir, keepDays: keepDays}
+func NewBackupService(db *sql.DB, dataDir string, keepDays int, attachments *AttachmentService) *BackupService {
+	return &BackupService{db: db, dataDir: dataDir, keepDays: keepDays, attachments: attachments}
 }
 
 type BackupResult struct {
@@ -58,7 +62,6 @@ func (s *BackupService) Run(ctx context.Context) (*BackupResult, error) {
 
 	entries := []backupEntry{
 		{path: tempDB, name: "havit.db"},
-		{path: filepath.Join(s.dataDir, "attachments"), name: "attachments"},
 	}
 	configPath := filepath.Join(s.dataDir, "config.yaml")
 	if _, err := os.Stat(configPath); err == nil {
@@ -67,7 +70,12 @@ func (s *BackupService) Run(ctx context.Context) (*BackupResult, error) {
 		return nil, fmt.Errorf("stat config for backup: %w", err)
 	}
 
-	if err := createTarGz(tempTar, entries); err != nil {
+	// Attachment payloads are streamed from the active object store (local
+	// dir or S3) rather than walked off disk, so backups are complete in
+	// both storage modes and produce the same archive layout either way.
+	if err := createTarGz(tempTar, entries, func(tw *tar.Writer) error {
+		return s.writeAttachmentsToTar(ctx, tw)
+	}); err != nil {
 		return nil, fmt.Errorf("tar: %w", err)
 	}
 	if err := os.Rename(tempTar, finalTar); err != nil {
@@ -181,7 +189,7 @@ type backupEntry struct {
 	name string
 }
 
-func createTarGz(output string, entries []backupEntry) (err error) {
+func createTarGz(output string, entries []backupEntry, attachments func(*tar.Writer) error) (err error) {
 	file, err := os.Create(output)
 	if err != nil {
 		return err
@@ -211,6 +219,14 @@ func createTarGz(output string, entries []backupEntry) (err error) {
 			return err
 		}
 	}
+	if attachments != nil {
+		if err := attachments(tw); err != nil {
+			_ = tw.Close()
+			_ = gz.Close()
+			_ = file.Close()
+			return err
+		}
+	}
 	if err := tw.Close(); err != nil {
 		_ = gz.Close()
 		_ = file.Close()
@@ -221,6 +237,69 @@ func createTarGz(output string, entries []backupEntry) (err error) {
 		return err
 	}
 	return file.Close()
+}
+
+// writeAttachmentsToTar streams every attachment record from the object
+// store. The archive name equals the stored key (attachments/<item>/...),
+// matching the on-disk layout a restore expects. Records whose object is
+// missing are skipped with a warning instead of failing the whole backup.
+func (s *BackupService) writeAttachmentsToTar(ctx context.Context, tw *tar.Writer) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT path, created_at FROM attachments ORDER BY item_id, path`)
+	if err != nil {
+		return fmt.Errorf("list attachments for backup: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var key string
+		var createdAt int64
+		if err := rows.Scan(&key, &createdAt); err != nil {
+			return err
+		}
+		content, err := s.attachments.OpenByPath(ctx, key)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				slog.Warn("skipping missing attachment object in backup", "path", key)
+				continue
+			}
+			return fmt.Errorf("open attachment %s for backup: %w", key, err)
+		}
+		// The tar writer needs the size up front; derive it by seeking
+		// since both the local file and the S3 reader support seeking.
+		size, err := content.Seek(0, io.SeekEnd)
+		if err == nil {
+			_, err = content.Seek(0, io.SeekStart)
+		}
+		if err != nil {
+			_ = content.Close()
+			return fmt.Errorf("measure attachment %s: %w", key, err)
+		}
+		header := &tar.Header{
+			Name:    key,
+			Mode:    0o644,
+			Size:    size,
+			ModTime: unixModTime(createdAt),
+		}
+		if err := tw.WriteHeader(header); err != nil {
+			_ = content.Close()
+			return err
+		}
+		if _, err := io.Copy(tw, content); err != nil {
+			_ = content.Close()
+			return fmt.Errorf("pack attachment %s: %w", key, err)
+		}
+		if err := content.Close(); err != nil {
+			return fmt.Errorf("close attachment %s: %w", key, err)
+		}
+	}
+	return rows.Err()
+}
+
+func unixModTime(ts int64) time.Time {
+	if ts <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(ts, 0)
 }
 
 func addPathToTar(tw *tar.Writer, src, name string) error {

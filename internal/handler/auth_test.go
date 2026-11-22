@@ -19,6 +19,7 @@ import (
 	"github.com/mahoo12138/havit/internal/db"
 	authmw "github.com/mahoo12138/havit/internal/middleware"
 	"github.com/mahoo12138/havit/internal/service"
+	"github.com/mahoo12138/havit/internal/storage"
 	"github.com/mahoo12138/havit/internal/system"
 )
 
@@ -89,11 +90,11 @@ func newAuthTestRouterWithExternalURLs(t *testing.T, barcodeURL, notifyWebhookUR
 		}
 	}
 	notifySvc := service.NewNotifyService(reminderSvc, service.NewHTTPNotifyGateway(configSvc))
-	backupSvc := service.NewBackupService(database, dataDir, 30)
+	backupSvc := service.NewBackupService(database, dataDir, 30, service.NewAttachmentService(database, storage.NewLocal(dataDir), nil))
 	searchSvc := service.NewSearchService(database)
 	prefsSvc := service.NewPreferencesService(database)
 	barcodeSvc := service.NewBarcodeService(barcodeURL)
-	attachmentSvc := service.NewAttachmentService(database, dataDir)
+	attachmentSvc := service.NewAttachmentService(database, storage.NewLocal(dataDir), nil)
 	aiRecognitionSvc := service.NewAIRecognitionService(attachmentSvc, nil)
 	apiTokenSvc := service.NewAPITokenService(database)
 
