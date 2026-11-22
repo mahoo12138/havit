@@ -29,8 +29,9 @@ func TestParseDateAcceptsSupportedFormats(t *testing.T) {
 		want int64
 	}{
 		{name: "epoch seconds", in: "1717200000", want: 1717200000},
-		{name: "date with dashes", in: "2026-06-08", want: time.Date(2026, 6, 8, 0, 0, 0, 0, time.UTC).Unix()},
-		{name: "date with slashes", in: "2026/06/08", want: time.Date(2026, 6, 8, 0, 0, 0, 0, time.UTC).Unix()},
+		// Date-only values parse as server-local midnight, matching the frontend.
+		{name: "date with dashes", in: "2026-06-08", want: time.Date(2026, 6, 8, 0, 0, 0, 0, time.Local).Unix()},
+		{name: "date with slashes", in: "2026/06/08", want: time.Date(2026, 6, 8, 0, 0, 0, 0, time.Local).Unix()},
 		{name: "rfc3339", in: "2026-06-08T12:34:56Z", want: time.Date(2026, 6, 8, 12, 34, 56, 0, time.UTC).Unix()},
 	}
 
@@ -155,7 +156,7 @@ func TestImportFullFieldsCSV(t *testing.T) {
 	if price != 1299.0 || currency != "CNY" {
 		t.Fatalf("purchase fields wrong: price=%v currency=%s", price, currency)
 	}
-	if stock != 2 || threshold != 1 || lifespan != 365 || inUseSince != time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC).Unix() {
+	if stock != 2 || threshold != 1 || lifespan != 365 || inUseSince != time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local).Unix() {
 		t.Fatalf("consumable fields wrong: stock=%d threshold=%d lifespan=%d in_use=%d", stock, threshold, lifespan, inUseSince)
 	}
 	if isPrivate != 0 {
@@ -176,7 +177,7 @@ func TestImportFullFieldsCSV(t *testing.T) {
 	if err := database.QueryRowContext(ctx, `SELECT warranty_expires_at FROM items WHERE name = '空气净化器'`).Scan(&warranty); err != nil {
 		t.Fatalf("query warranty: %v", err)
 	}
-	if warranty != time.Date(2028, 1, 1, 0, 0, 0, 0, time.UTC).Unix() {
+	if warranty != time.Date(2028, 1, 1, 0, 0, 0, 0, time.Local).Unix() {
 		t.Fatalf("expected warranty expiry, got %d", warranty)
 	}
 }

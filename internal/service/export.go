@@ -201,34 +201,34 @@ func WriteItemsCSV(w io.Writer, items []ExportItem) error {
 	}
 	for _, item := range items {
 		if err := cw.Write([]string{
-			item.Name,
+			csvFormulaSafe(item.Name),
 			item.Type,
 			item.Status,
-			stringPtrValue(item.Category),
-			stringPtrValue(item.Description),
-			stringPtrValue(item.LocationID),
-			stringPtrValue(item.LocationPath),
-			stringPtrValue(item.HomeBaseLocationPath),
-			stringPtrValue(item.CurrentStatusTag),
+			csvFormulaSafePtr(item.Category),
+			csvFormulaSafePtr(item.Description),
+			csvFormulaSafePtr(item.LocationID),
+			csvFormulaSafePtr(item.LocationPath),
+			csvFormulaSafePtr(item.HomeBaseLocationPath),
+			csvFormulaSafePtr(item.CurrentStatusTag),
 			floatPtrValue(item.PurchasePrice),
-			stringPtrValue(item.PurchaseCurrency),
+			csvFormulaSafePtr(item.PurchaseCurrency),
 			intPtrValue(item.PurchaseDate),
-			stringPtrValue(item.PurchasePlatform),
+			csvFormulaSafePtr(item.PurchasePlatform),
 			intPtrValue(item.WarrantyExpiresAt),
-			stringPtrValue(item.SerialNumber),
-			stringPtrValue(item.WarrantyContact),
-			stringPtrValue(item.ExitType),
+			csvFormulaSafePtr(item.SerialNumber),
+			csvFormulaSafePtr(item.WarrantyContact),
+			csvFormulaSafePtr(item.ExitType),
 			intPtrValue(item.ExitDate),
 			floatPtrValue(item.ExitPrice),
-			stringPtrValue(item.ExitCurrency),
-			stringPtrValue(item.ExitNotes),
-			tagNamesValue(item.Tags),
+			csvFormulaSafePtr(item.ExitCurrency),
+			csvFormulaSafePtr(item.ExitNotes),
+			csvFormulaSafe(tagNamesValue(item.Tags)),
 			intPtrCSVValue(item.CurrentStock),
 			intPtrCSVValue(item.MinStockThreshold),
 			intPtrCSVValue(item.LifespanDays),
 			intPtrValue(item.InUseSince),
 			boolValue(item.IsPrivate),
-			stringPtrValue(item.OwnerID),
+			csvFormulaSafePtr(item.OwnerID),
 			fmt.Sprintf("%d", item.CreatedAt),
 			fmt.Sprintf("%d", item.UpdatedAt),
 		}); err != nil {
@@ -239,54 +239,10 @@ func WriteItemsCSV(w io.Writer, items []ExportItem) error {
 	return cw.Error()
 }
 
+// locationPaths exposes only paths the caller may see (see
+// visibleLocationPaths): private location names never enter the export.
 func (s *ExportService) locationPaths(ctx context.Context) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, parent_id, name FROM locations`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	type loc struct {
-		id       string
-		parentID *string
-		name     string
-	}
-	locations := map[string]loc{}
-	for rows.Next() {
-		var l loc
-		if err := rows.Scan(&l.id, &l.parentID, &l.name); err != nil {
-			return nil, err
-		}
-		locations[l.id] = l
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	paths := map[string]string{}
-	var build func(id string) string
-	build = func(id string) string {
-		if path, ok := paths[id]; ok {
-			return path
-		}
-		l, ok := locations[id]
-		if !ok {
-			return ""
-		}
-		path := l.name
-		if l.parentID != nil {
-			if parent := build(*l.parentID); parent != "" {
-				path = parent + "/" + l.name
-			}
-		}
-		paths[id] = path
-		return path
-	}
-
-	for id := range locations {
-		build(id)
-	}
-	return paths, nil
+	return visibleLocationPaths(ctx, s.db, callerID(ctx))
 }
 
 func (s *ExportService) tagsForItems(ctx context.Context) (map[string][]*model.Tag, error) {
@@ -422,13 +378,10 @@ func (s *ExportService) virtualCredentials(ctx context.Context) ([]*model.Virtua
 		if err != nil {
 			return nil, err
 		}
-		if credential.LicenseKey != nil && *credential.LicenseKey != "" {
-			plain, err := s.crypto.Decrypt(*credential.LicenseKey)
-			if err != nil {
-				return nil, fmt.Errorf("decrypt license_key for credential %s: %w", credential.ID, err)
-			}
-			credential.LicenseKey = &plain
-		}
+		// Redact license keys from the portable export: the JSON file is
+		// plaintext and shareable, and database backups already carry the
+		// encrypted ciphertext.
+		credential.LicenseKey = nil
 		credentials = append(credentials, credential)
 	}
 	return credentials, rows.Err()
@@ -493,6 +446,26 @@ func stringPtrValue(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+// csvFormulaSafe neutralizes spreadsheet formula injection: a cell starting
+// with =, +, -, @ or tab executes as a formula when the CSV is opened in
+// Excel/LibreOffice, so it gets a leading apostrophe (rendered as text
+// there). Only free-text cells are routed through this — numeric columns
+// keep their literal values for round-tripping.
+func csvFormulaSafe(cell string) string {
+	if cell == "" {
+		return cell
+	}
+	switch cell[0] {
+	case '=', '+', '-', '@', '\t':
+		return "'" + cell
+	}
+	return cell
+}
+
+func csvFormulaSafePtr(p *string) string {
+	return csvFormulaSafe(stringPtrValue(p))
 }
 
 func intPtrValue(p *int64) string {

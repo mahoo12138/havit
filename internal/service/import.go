@@ -654,9 +654,18 @@ func (s *ImportService) updateExistingItem(ctx context.Context, tx *sql.Tx, id s
 		return fmt.Errorf("update item: %w", err)
 	}
 
+	// Rebuild the FTS row from the stored item: CSV columns absent from this
+	// row keep their stored values in items, and writing the parsed row here
+	// would silently blank them in the search index.
+	var storedName, storedDescription, storedCategory, storedSerial sql.NullString
+	if err := tx.QueryRowContext(ctx,
+		`SELECT name, description, category, serial_number FROM items WHERE id = ?`, id,
+	).Scan(&storedName, &storedDescription, &storedCategory, &storedSerial); err != nil {
+		return fmt.Errorf("read item for fts: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE items_fts SET name = ?, description = ?, category = ?, serial_number = ? WHERE item_id = ?`,
-		item.Name, item.Description, item.Category, item.SerialNumber, id,
+		storedName.String, storedDescription.String, storedCategory.String, storedSerial.String, id,
 	); err != nil {
 		return fmt.Errorf("update fts: %w", err)
 	}
@@ -1007,17 +1016,72 @@ type rowQuerierWithExec interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
+// importNodeType maps path depth onto the semantic location hierarchy
+// (room → furniture → container) so imported trees satisfy the same nesting
+// rules as locations created through the UI. Deeper levels stay containers.
+func importNodeType(depth int) string {
+	switch depth {
+	case 0:
+		return "room"
+	case 1:
+		return "furniture"
+	default:
+		return "container"
+	}
+}
+
+// matchVisibleLocation finds a same-named child location the caller can see.
+// A name collision with a location outside the caller's visible set (e.g.
+// another user's private node) counts as missing, so the caller gets their
+// own node instead of items silently filed into someone else's space.
+func matchVisibleLocation(ctx context.Context, q rowQuerierWithRow, parentID *string, name string, visible map[string]bool) (string, bool, error) {
+	var rows *sql.Rows
+	var err error
+	if parentID == nil {
+		rows, err = q.QueryContext(ctx,
+			`SELECT id FROM locations WHERE parent_id IS NULL AND name = ?`, name)
+	} else {
+		rows, err = q.QueryContext(ctx,
+			`SELECT id FROM locations WHERE parent_id = ? AND name = ?`, *parentID, name)
+	}
+	if err != nil {
+		return "", false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", false, err
+		}
+		if visible[id] {
+			return id, true, nil
+		}
+	}
+	return "", false, rows.Err()
+}
+
 // ensureLocationPath walks a path like "卧室 → 书桌 → 抽屉" and creates missing nodes,
-// returning the id of the leaf.
+// returning the id of the leaf. Lookups only match locations visible to the
+// caller, and created nodes are owned by the caller (mirroring the location
+// create endpoint), so imports never resolve into other users' locations.
 func ensureLocationPath(ctx context.Context, tx rowQuerierWithExec, path string, cache map[string]string, now int64) (string, error) {
 	segments := splitPath(path)
 	if len(segments) == 0 {
 		return "", errors.New("empty path")
 	}
+	owner := callerID(ctx)
+	var ownerArg any
+	if owner != "" {
+		ownerArg = owner
+	}
+	visible, err := visibleLocationIDs(ctx, tx, owner)
+	if err != nil {
+		return "", err
+	}
 
 	var parentID *string
 	cacheKey := ""
-	for _, name := range segments {
+	for depth, name := range segments {
 		if cacheKey == "" {
 			cacheKey = name
 		} else {
@@ -1029,28 +1093,22 @@ func ensureLocationPath(ctx context.Context, tx rowQuerierWithExec, path string,
 			continue
 		}
 
-		var id string
-		var err error
-		if parentID == nil {
-			err = tx.QueryRowContext(ctx,
-				`SELECT id FROM locations WHERE parent_id IS NULL AND name = ?`, name,
-			).Scan(&id)
-		} else {
-			err = tx.QueryRowContext(ctx,
-				`SELECT id FROM locations WHERE parent_id = ? AND name = ?`, *parentID, name,
-			).Scan(&id)
+		matched, found, merr := matchVisibleLocation(ctx, tx, parentID, name, visible)
+		if merr != nil {
+			return "", merr
 		}
-		if errors.Is(err, sql.ErrNoRows) {
+		id := matched
+		if !found {
 			id = ulid.Make().String()
-			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO locations (id, parent_id, name, type, sort_order, is_private, created_at, updated_at)
-				 VALUES (?, ?, ?, 'room', 0, 0, ?, ?)`,
-				id, parentID, name, now, now,
-			); err != nil {
-				return "", err
+			if _, ierr := tx.ExecContext(ctx,
+				`INSERT INTO locations (id, parent_id, name, type, sort_order, is_private, owner_id, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?)`,
+				id, parentID, name, importNodeType(depth), ownerArg, now, now,
+			); ierr != nil {
+				return "", ierr
 			}
-		} else if err != nil {
-			return "", err
+			// The new node is owned by the caller, hence visible to them.
+			visible[id] = true
 		}
 		cache[cacheKey] = id
 		pid := id
@@ -1060,30 +1118,26 @@ func ensureLocationPath(ctx context.Context, tx rowQuerierWithExec, path string,
 }
 
 // lookupLocationPath returns the leaf location id when the full path already
-// exists, without writing anything (used by preview).
+// exists among the caller's visible locations, without writing anything (used
+// by preview). Invisible name collisions count as missing so the preview
+// matches what commit will do.
 func lookupLocationPath(ctx context.Context, q rowQuerierWithRow, path string) (string, bool, error) {
 	segments := splitPath(path)
 	if len(segments) == 0 {
 		return "", false, errors.New("empty path")
 	}
+	visible, err := visibleLocationIDs(ctx, q, callerID(ctx))
+	if err != nil {
+		return "", false, err
+	}
 	var parentID *string
 	for _, name := range segments {
-		var id string
-		var err error
-		if parentID == nil {
-			err = q.QueryRowContext(ctx,
-				`SELECT id FROM locations WHERE parent_id IS NULL AND name = ?`, name,
-			).Scan(&id)
-		} else {
-			err = q.QueryRowContext(ctx,
-				`SELECT id FROM locations WHERE parent_id = ? AND name = ?`, *parentID, name,
-			).Scan(&id)
+		id, found, ferr := matchVisibleLocation(ctx, q, parentID, name, visible)
+		if ferr != nil {
+			return "", false, ferr
 		}
-		if errors.Is(err, sql.ErrNoRows) {
+		if !found {
 			return "", false, nil
-		}
-		if err != nil {
-			return "", false, err
 		}
 		pid := id
 		parentID = &pid
@@ -1149,7 +1203,10 @@ func parseDate(s string) (int64, error) {
 		return n, nil
 	}
 	for _, layout := range []string{"2006-01-02", "2006/01/02", time.RFC3339} {
-		if t, err := time.Parse(layout, s); err == nil {
+		// Parse date-only values in the server's local timezone, matching
+		// the frontend: UTC midnight would shift dates a day for UTC-negative
+		// timezones.
+		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
 			return t.Unix(), nil
 		}
 	}

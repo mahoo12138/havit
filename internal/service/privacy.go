@@ -130,6 +130,69 @@ func locationClause(alias string, visible map[string]bool, where string, args []
 	return where, args
 }
 
+// visibleLocationPaths builds "parent/child" paths for every location the
+// caller can see. Locations outside the caller's visibility (their own
+// privacy or a hidden ancestor) get no entry: callers must treat a missing
+// path as "do not show", which keeps private location names from leaking
+// through search hints and exports.
+func visibleLocationPaths(ctx context.Context, q rowQuerier, owner string) (map[string]string, error) {
+	visible, err := visibleLocationIDs(ctx, q, owner)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.QueryContext(ctx, `SELECT id, parent_id, name FROM locations`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type loc struct {
+		id       string
+		parentID *string
+		name     string
+	}
+	locations := map[string]loc{}
+	for rows.Next() {
+		var l loc
+		if err := rows.Scan(&l.id, &l.parentID, &l.name); err != nil {
+			return nil, err
+		}
+		locations[l.id] = l
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	paths := map[string]string{}
+	var build func(id string) string
+	build = func(id string) string {
+		if path, ok := paths[id]; ok {
+			return path
+		}
+		l, ok := locations[id]
+		if !ok {
+			return ""
+		}
+		path := l.name
+		if l.parentID != nil {
+			if parent := build(*l.parentID); parent != "" {
+				path = parent + "/" + l.name
+			}
+		}
+		paths[id] = path
+		return path
+	}
+	for id := range locations {
+		build(id)
+	}
+	for id := range paths {
+		if !visible[id] {
+			delete(paths, id)
+		}
+	}
+	return paths, nil
+}
+
 // applyItemPrivacy adds the full item visibility rule (own privacy + location
 // inheritance) to a WHERE built for the items table, reading the caller from
 // ctx. alias names the items table in the query.

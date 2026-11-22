@@ -333,53 +333,10 @@ func (s *SearchService) Filter(ctx context.Context, f SearchFilter) ([]SearchRes
 	return results, nil
 }
 
+// locationPaths exposes only paths the caller may see (see
+// visibleLocationPaths): a hidden location's name never reaches a hint.
 func (s *SearchService) locationPaths(ctx context.Context) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, parent_id, name FROM locations`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	type loc struct {
-		id       string
-		parentID *string
-		name     string
-	}
-	locations := map[string]loc{}
-	for rows.Next() {
-		var l loc
-		if err := rows.Scan(&l.id, &l.parentID, &l.name); err != nil {
-			return nil, err
-		}
-		locations[l.id] = l
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	paths := map[string]string{}
-	var build func(id string) string
-	build = func(id string) string {
-		if path, ok := paths[id]; ok {
-			return path
-		}
-		l, ok := locations[id]
-		if !ok {
-			return ""
-		}
-		path := l.name
-		if l.parentID != nil {
-			if parent := build(*l.parentID); parent != "" {
-				path = parent + "/" + l.name
-			}
-		}
-		paths[id] = path
-		return path
-	}
-	for id := range locations {
-		build(id)
-	}
-	return paths, nil
+	return visibleLocationPaths(ctx, s.db, callerID(ctx))
 }
 
 func (s *SearchService) like(ctx context.Context, query string, locationPaths map[string]string, includeArchived bool) ([]SearchResult, error) {
