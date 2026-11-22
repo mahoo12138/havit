@@ -328,11 +328,7 @@ export const sidebarBrandMark = style({
   width: '2rem',
   height: '2rem',
   placeItems: 'center',
-  borderRadius: themeVars.radius2,
-  background: themeVars.accent,
-  color: themeVars.onAccent,
-  fontSize: themeVars.textSizeMd,
-  fontWeight: themeVars.weightBold,
+  color: themeVars.sidebarActiveText,
 });
 
 export const sidebarBrandText = style({
@@ -626,6 +622,9 @@ export const dashboardMain = style({
   flexDirection: 'column',
   gap: themeVars.space5,
   minWidth: 0,
+  // Sized by the layout grid, never by its contents; the KPI strip keys its
+  // breakpoints off this container instead of the viewport.
+  containerType: 'inline-size',
 });
 
 export const dashboardRail = style({
@@ -656,6 +655,12 @@ export const greetingCopy = style({
   minWidth: 0,
 });
 
+// Five tiles never wrap evenly, so the strip switches to 3-up below the
+// 5-up width (5 tracks at min 7.5rem plus four 1px gaps). auto-fit's 4-up
+// range in between would leave the last tile alone beside three empty
+// slots; kpiTileTail fills the odd cell in that state.
+const kpiStripNarrowQuery = '(max-width: calc(37.5rem + 3px))';
+
 export const kpiStrip = style({
   display: 'grid',
   // One ledger-strip card: 1px gaps over a hairline background read as
@@ -668,6 +673,11 @@ export const kpiStrip = style({
   borderRadius: themeVars.radius3,
   boxShadow: themeVars.shadowSoft,
   overflow: 'hidden',
+  '@container': {
+    [kpiStripNarrowQuery]: {
+      gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    },
+  },
 });
 
 export const kpiTile = style({
@@ -677,6 +687,15 @@ export const kpiTile = style({
   padding: `${themeVars.space3} ${themeVars.space4}`,
   background: themeVars.panel,
   minWidth: 0,
+});
+
+/** Last tile of kpiStrip: spans the odd cell in the 3-up fallback row. */
+export const kpiTileTail = style({
+  '@container': {
+    [kpiStripNarrowQuery]: {
+      gridColumn: '2 / -1',
+    },
+  },
 });
 
 export const kpiIcon = style({
@@ -1902,140 +1921,6 @@ export const locationParentNoteText = style({
 
 /* ---------- Item Detail page ---------- */
 
-export const itemHero = style({
-  display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1.05fr) minmax(0, 1fr)',
-  gap: themeVars.space5,
-  '@media': {
-    '(max-width: 60em)': {
-      gridTemplateColumns: '1fr',
-    },
-  },
-});
-
-export const itemGallery = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space3,
-  minWidth: 0,
-});
-
-export const itemMainPhoto = style({
-  position: 'relative',
-  display: 'grid',
-  placeItems: 'center',
-  aspectRatio: '4 / 3',
-  borderRadius: themeVars.radius3,
-  border: `1px solid ${themeVars.lineSoft}`,
-  background: themeVars.bgSoft,
-  overflow: 'hidden',
-});
-
-export const itemMainPhotoImg = style({
-  width: '100%',
-  height: '100%',
-  objectFit: 'contain',
-  padding: themeVars.space4,
-});
-
-export const itemPhotoEmpty = style({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  gap: themeVars.space2,
-  padding: themeVars.space5,
-  color: themeVars.muted,
-  textAlign: 'center',
-  lineHeight: themeVars.leadingNormal,
-});
-
-export const itemPhotoCount = style({
-  position: 'absolute',
-  top: themeVars.space3,
-  right: themeVars.space3,
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '4px',
-  padding: `${themeVars.space1} ${themeVars.space2}`,
-  borderRadius: '999px',
-  background: 'rgba(17, 24, 39, 0.60)',
-  color: '#fff',
-  fontSize: themeVars.textSizeXs,
-  fontWeight: themeVars.weightSemibold,
-});
-
-export const itemThumbStrip = style({
-  display: 'grid',
-  gridAutoFlow: 'column',
-  gridAutoColumns: 'minmax(64px, 1fr)',
-  gap: themeVars.space2,
-  overflowX: 'auto',
-  paddingBottom: themeVars.space1,
-});
-
-export const itemThumb = style({
-  aspectRatio: '1',
-  border: `1px solid ${themeVars.lineSoft}`,
-  borderRadius: themeVars.radius2,
-  background: themeVars.bgSoft,
-  overflow: 'hidden',
-  cursor: 'pointer',
-  padding: 0,
-  transition: 'border-color 160ms ease, box-shadow 160ms ease',
-  selectors: {
-    '&:hover': {
-      borderColor: `color-mix(in srgb, ${themeVars.accent} 40%, ${themeVars.line})`,
-    },
-    '&[data-active="true"]': {
-      borderColor: themeVars.accent,
-      boxShadow: `0 0 0 2px ${themeVars.focusRing}`,
-    },
-  },
-});
-
-export const itemThumbImg = style({
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover',
-  display: 'block',
-});
-
-export const itemThumbAdd = style({
-  display: 'grid',
-  placeItems: 'center',
-  aspectRatio: '1',
-  border: `1px dashed ${themeVars.line}`,
-  borderRadius: themeVars.radius2,
-  background: themeVars.bgSoft,
-  color: themeVars.muted,
-  cursor: 'pointer',
-  transition: 'border-color 160ms ease, color 160ms ease, background-color 160ms ease',
-  selectors: {
-    '&:hover:not(:disabled)': {
-      borderColor: themeVars.accent,
-      color: themeVars.accent,
-      background: themeVars.accentSoft,
-    },
-    '&:disabled': {
-      opacity: 0.5,
-      cursor: 'not-allowed',
-    },
-  },
-});
-
-export const itemSpec = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space4,
-  minWidth: 0,
-});
-
-export const itemSpecHead = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space2,
-});
-
 export const itemSpecBadges = style({
   display: 'flex',
   flexWrap: 'wrap',
@@ -2043,74 +1928,9 @@ export const itemSpecBadges = style({
   gap: themeVars.space2,
 });
 
-export const itemSpecType = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '4px',
-  padding: `2px ${themeVars.space2}`,
-  borderRadius: '999px',
-  background: themeVars.lineSoft,
-  color: themeVars.text,
-  fontSize: themeVars.textSizeXs,
-  fontWeight: themeVars.weightSemibold,
-});
-
 export const itemSpecCategory = style({
   color: themeVars.muted,
   fontSize: themeVars.textSizeSm,
-});
-
-export const itemSpecGrid = style({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: themeVars.space2,
-  '@media': {
-    '(max-width: 36em)': {
-      gridTemplateColumns: '1fr',
-    },
-  },
-});
-
-export const itemSpecCell = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '4px',
-  padding: themeVars.space3,
-  borderRadius: themeVars.radius2,
-  border: `1px solid ${themeVars.lineSoft}`,
-  background: themeVars.bgSoft,
-  minWidth: 0,
-});
-
-export const itemSpecCellLabel = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSize2xs,
-  fontWeight: themeVars.weightSemibold,
-  letterSpacing: themeVars.trackingWider,
-  textTransform: 'uppercase',
-});
-
-export const itemSpecCellValue = style({
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeMd,
-  fontWeight: themeVars.weightSemibold,
-  lineHeight: themeVars.leadingSnug,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  letterSpacing: themeVars.trackingTight,
-});
-
-export const itemSpecCellMuted = style({
-  color: themeVars.muted,
-  fontWeight: themeVars.weightMedium,
-});
-
-export const itemNote = style({
-  margin: 0,
-  color: themeVars.text,
-  fontSize: themeVars.textSizeBase,
-  lineHeight: themeVars.leadingNormal,
 });
 
 export const itemDashboard = style({
@@ -2139,128 +1959,6 @@ export const itemRail = style({
   minWidth: 0,
 });
 
-export const itemSectionGrid = style({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(18rem, 1fr))',
-  gap: themeVars.space4,
-});
-
-// Applied as a className on the Card component; head/body carry the padding.
-export const itemSection = style({
-  selectors: {
-    '&[data-slot="card"]': {
-      padding: 0,
-      gap: 0,
-      minWidth: 0,
-    },
-  },
-});
-
-export const itemSectionHead = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: themeVars.space2,
-  padding: `${themeVars.space3} ${themeVars.space4}`,
-  borderBottom: `1px solid ${themeVars.lineSoft}`,
-});
-
-export const itemSectionTitle = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: themeVars.space2,
-  fontSize: themeVars.textSizeMd,
-  fontWeight: themeVars.weightBold,
-  color: themeVars.ink,
-  letterSpacing: themeVars.trackingTight,
-  margin: 0,
-});
-
-export const itemSectionTitleIcon = style({
-  display: 'inline-grid',
-  width: '1.6rem',
-  height: '1.6rem',
-  placeItems: 'center',
-  borderRadius: themeVars.radius1,
-  background: themeVars.accentSoft,
-  color: themeVars.accentInk,
-});
-
-export const itemSectionHint = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-});
-
-export const itemSectionBody = style({
-  padding: themeVars.space4,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space3,
-});
-
-export const itemSectionBodyTight = style({
-  padding: 0,
-});
-
-export const itemSectionEmpty = style({
-  padding: `${themeVars.space4} ${themeVars.space4} ${themeVars.space5}`,
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeBase,
-  textAlign: 'center',
-});
-
-export const itemKvList = style({
-  display: 'flex',
-  flexDirection: 'column',
-});
-
-export const itemKvRow = style({
-  display: 'flex',
-  alignItems: 'baseline',
-  justifyContent: 'space-between',
-  gap: themeVars.space3,
-  padding: `${themeVars.space2} 0`,
-  borderBottom: `1px solid ${themeVars.lineSoft}`,
-  fontSize: themeVars.textSizeBase,
-  selectors: {
-    '&:first-child': {
-      paddingTop: 0,
-    },
-    '&:last-child': {
-      borderBottom: 0,
-      paddingBottom: 0,
-    },
-  },
-});
-
-export const itemKvLabel = style({
-  color: themeVars.muted,
-  flex: '0 0 auto',
-});
-
-export const itemKvValue = style({
-  color: themeVars.ink,
-  fontWeight: themeVars.weightMedium,
-  textAlign: 'right',
-  minWidth: 0,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-});
-
-export const itemStockHero = style({
-  display: 'flex',
-  alignItems: 'baseline',
-  gap: themeVars.space2,
-});
-
-export const itemStockValue = textStyles.metricLg;
-
-export const itemStockUnit = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeBase,
-});
-
 export const itemStockLow = style({
   display: 'inline-flex',
   alignItems: 'center',
@@ -2271,191 +1969,6 @@ export const itemStockLow = style({
   color: themeVars.warningText,
   fontSize: themeVars.textSizeXs,
   fontWeight: themeVars.weightSemibold,
-});
-
-export const itemTimeline = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space2,
-  position: 'relative',
-});
-
-export const itemTimelineRow = style({
-  position: 'relative',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '2px',
-  paddingLeft: '1.4rem',
-  paddingBottom: themeVars.space3,
-  selectors: {
-    '&::before': {
-      content: '""',
-      position: 'absolute',
-      left: '0.45rem',
-      top: '0.55rem',
-      bottom: 0,
-      width: '1px',
-      background: themeVars.lineSoft,
-    },
-    '&::after': {
-      content: '""',
-      position: 'absolute',
-      left: '0.25rem',
-      top: '0.35rem',
-      width: '0.5rem',
-      height: '0.5rem',
-      borderRadius: '999px',
-      background: themeVars.accent,
-      boxShadow: `0 0 0 3px ${themeVars.accentSoft}`,
-    },
-    '&:last-child': {
-      paddingBottom: 0,
-    },
-    '&:last-child::before': {
-      display: 'none',
-    },
-  },
-});
-
-export const itemTimelineTitle = style({
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeBase,
-  fontWeight: themeVars.weightSemibold,
-});
-
-export const itemTimelineMeta = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeXs,
-});
-
-export const itemTimelinePayload = style({
-  marginTop: '4px',
-  padding: `${themeVars.space1} ${themeVars.space2}`,
-  borderRadius: themeVars.radius1,
-  background: themeVars.bgSoft,
-  border: `1px solid ${themeVars.lineSoft}`,
-  color: themeVars.text,
-  fontSize: themeVars.textSizeSm,
-  fontFamily: themeVars.fontMono,
-  wordBreak: 'break-all',
-});
-
-export const itemLoanCard = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space2,
-  padding: themeVars.space3,
-  borderRadius: themeVars.radius2,
-  border: `1px solid ${themeVars.lineSoft}`,
-  background: themeVars.bgSoft,
-});
-
-export const itemLoanHead = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: themeVars.space2,
-});
-
-export const itemLoanName = style({
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeMd,
-  fontWeight: themeVars.weightSemibold,
-});
-
-export const itemLoanMeta = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-});
-
-export const itemRailField = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: themeVars.space2,
-});
-
-export const itemRailFieldLabel = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeXs,
-  fontWeight: themeVars.weightSemibold,
-  letterSpacing: themeVars.trackingWide,
-  textTransform: 'uppercase',
-});
-
-export const itemRailLocation = style({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: themeVars.space2,
-  padding: `${themeVars.space2} ${themeVars.space3}`,
-  borderRadius: themeVars.radius2,
-  border: `1px solid ${themeVars.lineSoft}`,
-  background: themeVars.bgSoft,
-  color: themeVars.text,
-  fontSize: themeVars.textSizeBase,
-  lineHeight: themeVars.leadingSnug,
-});
-
-export const itemRailDivider = style({
-  height: '1px',
-  background: themeVars.lineSoft,
-});
-
-export const itemCredentialCard = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '4px',
-  padding: themeVars.space3,
-  borderRadius: themeVars.radius2,
-  border: `1px solid ${themeVars.lineSoft}`,
-  background: themeVars.bgSoft,
-});
-
-export const itemCredentialTitle = style({
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeBase,
-  fontWeight: themeVars.weightSemibold,
-});
-
-export const itemCredentialMeta = style({
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeSm,
-});
-
-export const itemAddonRow = style({
-  display: 'flex',
-  alignItems: 'baseline',
-  justifyContent: 'space-between',
-  gap: themeVars.space2,
-  padding: `${themeVars.space2} 0`,
-  borderBottom: `1px solid ${themeVars.lineSoft}`,
-  selectors: {
-    '&:last-child': {
-      borderBottom: 0,
-    },
-  },
-});
-
-export const itemAddonName = style({
-  color: themeVars.ink,
-  fontSize: themeVars.textSizeBase,
-  fontWeight: themeVars.weightMedium,
-});
-
-export const itemAddonPrice = style({
-  color: themeVars.accentInk,
-  fontSize: themeVars.textSizeBase,
-  fontWeight: themeVars.weightSemibold,
-  fontVariantNumeric: 'tabular-nums',
-});
-
-export const itemSectionFoot = style({
-  padding: `${themeVars.space2} ${themeVars.space4} ${themeVars.space3}`,
-  borderTop: `1px solid ${themeVars.lineSoft}`,
-  background: themeVars.bgSoft,
-  display: 'flex',
-  justifyContent: 'flex-end',
-  fontSize: themeVars.textSizeSm,
-  color: themeVars.muted,
 });
 
 export const loanPageMetrics = style({
@@ -2502,19 +2015,6 @@ export const loanMetricSub = style({
   fontSize: themeVars.textSizeSm,
 });
 
-export const loanFilterBar = style({
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  gap: themeVars.space3,
-  marginBottom: themeVars.space3,
-  '@media': {
-    '(max-width: 48em)': {
-      gap: themeVars.space2,
-    },
-  },
-});
-
 export const loanFilterSelect = style({
   minHeight: '2rem',
   boxSizing: 'border-box',
@@ -2544,20 +2044,6 @@ export const loanFilterSelect = style({
   },
 });
 
-export const loanFilterIconBtn = style([
-  iconButton,
-  {
-    width: '2rem',
-    minWidth: '2rem',
-    height: '2rem',
-  },
-]);
-
-export const loanToolbarActions = style({
-  display: 'flex',
-  gap: themeVars.space2,
-  marginLeft: 'auto',
-});
 
 export const loanStatusBadge = styleVariants({
   active: { background: themeVars.accentSoft, color: themeVars.accentInk },
@@ -2642,25 +2128,6 @@ export const loanActionBtn = style({
   },
 });
 
-export const loanActionMore = style({
-  background: 'transparent',
-  border: 0,
-  borderRadius: themeVars.radius2,
-  padding: themeVars.space1,
-  color: themeVars.muted,
-  cursor: 'pointer',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  transition: 'color 140ms ease, background-color 140ms ease',
-  selectors: {
-    '&:hover': {
-      color: themeVars.text,
-      background: themeVars.lineSoft,
-    },
-  },
-});
-
 export const loanPageHeader = style({
   display: 'flex',
   alignItems: 'flex-start',
@@ -2689,18 +2156,6 @@ export const loanPageSubtitle = style({
   margin: 0,
 });
 
-export const loanBottomGrid = style({
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr 1fr',
-  gap: themeVars.space4,
-  marginTop: themeVars.space4,
-  '@media': {
-    '(max-width: 58em)': {
-      gridTemplateColumns: '1fr',
-    },
-  },
-});
-
 export const loanBottomCard = style({
   selectors: {
     '&[data-slot="card"]': {
@@ -2715,43 +2170,6 @@ export const loanBottomTitle = style({
   fontWeight: themeVars.weightBold,
   color: themeVars.ink,
   letterSpacing: themeVars.trackingTight,
-});
-
-export const loanMobileCard = style({
-  selectors: {
-    '&[data-slot="card"]': {
-      padding: themeVars.space4,
-      gap: themeVars.space3,
-    },
-  },
-});
-
-export const loanMobileRow = style({
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-});
-
-export const loanMobileItemRow = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: themeVars.space3,
-});
-
-export const loanMobileMeta = style({
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: `${themeVars.space1} ${themeVars.space4}`,
-  fontSize: themeVars.textSizeSm,
-});
-
-export const loanMobileLabel = style({
-  color: themeVars.muted,
-});
-
-export const loanMobileValue = style({
-  color: themeVars.text,
-  fontWeight: themeVars.weightMedium,
 });
 
 /* ---------- Essentials Page ---------- */
@@ -3686,14 +3104,6 @@ export const supplyDetailHeroMain = style({
   flex: 1,
 });
 
-export const supplyDetailHeroTitle = style({
-  fontSize: themeVars.textSizeXl,
-  fontWeight: themeVars.weightBold,
-  color: themeVars.ink,
-  letterSpacing: themeVars.trackingTight,
-  margin: 0,
-});
-
 export const supplyDetailHeroMeta = style({
   display: 'flex',
   alignItems: 'center',
@@ -3726,13 +3136,6 @@ export const supplyDetailTypeBadge = styleVariants({
     background: themeVars.accentSoft,
     color: themeVars.accentInk,
   },
-});
-
-export const supplyDetailActions = style({
-  display: 'flex',
-  alignItems: 'center',
-  gap: themeVars.space2,
-  flexShrink: 0,
 });
 
 export const supplyActionRow = style({
@@ -3935,13 +3338,6 @@ export const supplyLifeCountdownValue = textStyles.metricLg;
 export const supplyLifeCountdownLabel = style({
   fontSize: themeVars.textSizeSm,
   color: themeVars.muted,
-});
-
-export const supplyDetailEmpty = style({
-  textAlign: 'center',
-  padding: `${themeVars.space5} ${themeVars.space4}`,
-  color: themeVars.muted,
-  fontSize: themeVars.textSizeBase,
 });
 
 export const supplyBackLink = style({
@@ -4183,25 +3579,6 @@ export const abnormalPagination = style({
   justifyContent: 'center',
   gap: themeVars.space1,
   padding: `${themeVars.space3} 0`,
-});
-
-export const abnormalPageBtn = style({
-  width: '28px',
-  height: '28px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: '6px',
-  border: `1px solid ${themeVars.line}`,
-  background: themeVars.panel,
-  cursor: 'pointer',
-  fontSize: themeVars.textSizeSm,
-  color: themeVars.ink,
-  ':hover': { background: themeVars.bgSoft },
-  selectors: {
-    '&[disabled]': { opacity: 0.4, cursor: 'default' },
-    '&.active': { background: themeVars.accent, color: themeVars.onAccent, borderColor: themeVars.accent },
-  },
 });
 
 export const abnormalMetricStrip = style({
